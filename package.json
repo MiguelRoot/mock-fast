@@ -1,6 +1,6 @@
 {
   "name": "@killki/mock-fast",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "publishConfig": {
     "access": "public"
   },
@@ -15,8 +15,7 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE",
-    "SKILL.md"
+    "LICENSE"
   ],
   "keywords": [
     "mock",
@@ -34,7 +33,7 @@
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "build:ts": "tsc -p tsconfig.json",
-    "build:skill": "node -e \"const fs=require('fs');fs.mkdirSync('dist/mock-fast',{recursive:true});fs.copyFileSync('SKILL.md','dist/mock-fast/SKILL.md')\"",
+    "build:skill": "node -e \"const fs=require('fs');fs.mkdirSync('dist/mock-fast',{recursive:true});fs.copyFileSync('mock-fast/SKILL.md','dist/mock-fast/SKILL.md')\"",
     "build": "npm run clean && npm run build:ts && npm run build:skill",
     "dev": "tsx src/cli.ts start",
     "start": "node ./dist/cli.js start",

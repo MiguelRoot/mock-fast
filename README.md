@@ -1,17 +1,17 @@
 # mock-fast
 
-Servidor mock declarativo con un DSL JSON pequeño y escalable. Un único comando, herencia de rutas anidadas, autenticación heredada, errores aleatorios, latencias variables, rate-limit por usuario, templating con Faker, hot reload.
+Declarative mock server with a small, scalable JSON DSL. One command to start, nested-route inheritance, inherited authentication, random errors, variable latency, per-user rate limiting, Faker-powered templating, hot reload.
 
-mock-fast no reinventa el motor: se apoya en [@mocks-server/main](https://www.mocks-server.org) y le añade encima un DSL más conciso, herencia entre rutas y un pipeline de extensiones que se amplía con un solo archivo.
+mock-fast doesn't reinvent the engine: it builds on [@mocks-server/main](https://www.mocks-server.org) and adds a more concise DSL, route inheritance, and an extension pipeline you grow with a single file.
 
-## Filosofía
+## Philosophy
 
-- **Una línea para arrancar.** Defaults razonables hard-coded — puerto, host, CORS, hot reload, header de auth. Si querés algo no-estándar, va al JSON, no a flags.
-- **El JSON es la fuente de verdad.** Editás un archivo, el servidor recarga.
-- **Anidación con herencia.** Una vez declarás `requireAuth` en la raíz protegida, todas las hijas la heredan. Las URLs se concatenan.
-- **Escalable.** Añadir una extensión nueva = un archivo en `src/extensions/`. El pipeline las encadena.
+- **One line to start.** Sensible hard-coded defaults — port, host, CORS, hot reload, auth header. If you need something non-standard it goes in the JSON, not in flags.
+- **The JSON is the source of truth.** Edit one file, the server reloads.
+- **Nesting with inheritance.** Declare `requireAuth` once on a protected root and every child inherits it. URLs concatenate.
+- **Scalable.** Adding a new extension = one file in `src/extensions/`. The pipeline chains them.
 
-## Instalación
+## Install
 
 ```bash
 npm install --save-dev mock-fast
@@ -19,7 +19,7 @@ npm install --save-dev mock-fast
 
 ## Hello world
 
-Creá un archivo `mock-fast.json` en la raíz del proyecto:
+Create a `mock-fast.json` file at the project root:
 
 ```json
 {
@@ -33,7 +33,7 @@ Creá un archivo `mock-fast.json` en la raíz del proyecto:
 }
 ```
 
-Arrancá:
+Start:
 
 ```bash
 npx mock-fast start
@@ -49,17 +49,17 @@ npx mock-fast start
 
 ## Defaults
 
-| Concepto | Default |
+| Concept | Default |
 |---|---|
-| Archivo del DSL | busca en `cwd`: `mock-fast.json`, `mocks.json`, `mock.json` |
-| Puerto HTTP | `3001` |
-| Host HTTP | `127.0.0.1` |
-| CORS | abierto |
-| Admin API | `http://127.0.0.1:3110` (provisto por mocks-server) |
-| Hot reload | activo (el servidor se entera cuando editás el JSON) |
-| Header de auth | `Authorization` con patrón `^Bearer [A-Za-z0-9._-]+$` |
+| DSL file | searches `cwd` for: `mock-fast.json`, `mocks.json`, `mock.json` |
+| HTTP port | `3001` |
+| HTTP host | `127.0.0.1` |
+| CORS | open |
+| Admin API | `http://127.0.0.1:3110` (provided by mocks-server) |
+| Hot reload | on (the server picks up changes when you save the JSON) |
+| Auth header | `Authorization` with pattern `^Bearer [A-Za-z0-9._-]+$` |
 
-Para tocar cualquiera, va en el JSON:
+To change any of these, put it in the JSON:
 
 ```json
 {
@@ -69,7 +69,7 @@ Para tocar cualquiera, va en el JSON:
 }
 ```
 
-Flags CLI solo para overrides puntuales:
+CLI flags are only for one-off overrides:
 
 ```bash
 mock-fast start --file ./fixtures/mock.json --port 4000 --no-watch
@@ -77,9 +77,9 @@ mock-fast start --file ./fixtures/mock.json --port 4000 --no-watch
 
 ## DSL
 
-Cada nodo bajo `routes` puede ser una ruta, un grupo, o ambas cosas.
+Every node under `routes` can be a route, a group, or both.
 
-### Ruta plana
+### Flat route
 
 ```json
 {
@@ -90,35 +90,35 @@ Cada nodo bajo `routes` puede ser una ruta, un grupo, o ambas cosas.
 }
 ```
 
-### Rutas anidadas
+### Nested routes
 
-La `url` de cada nodo se **concatena** con la del padre. Las hijas heredan `headers` y `extensions` por defecto. Pueden sobrescribir.
+Each node's `url` is **concatenated** with its parent's. Children inherit `headers` and `extensions` by default. They can override.
 
 ```json
 {
-  "url": "/api/protegida",
+  "url": "/api/protected",
   "extensions": { "requireAuth": true },
-  "response": { "status": 200, "body": { "data": "raíz" } },
+  "response": { "status": 200, "body": { "data": "root" } },
   "routes": [
     {
-      "id": "usuarios-list",
-      "url": "/usuarios",
+      "id": "users-list",
+      "url": "/users",
       "response": { "status": 200, "body": { "users": ["a", "b"] } }
     },
     {
-      "id": "usuarios-byId",
-      "url": "/usuarios/:id",
+      "id": "users-byId",
+      "url": "/users/:id",
       "response": { "status": 200, "body": { "id": "{{params.id}}" } }
     }
   ]
 }
 ```
 
-URLs finales: `/api/protegida`, `/api/protegida/usuarios`, `/api/protegida/usuarios/:id`. Las tres requieren `Authorization: Bearer ...`.
+Final URLs: `/api/protected`, `/api/protected/users`, `/api/protected/users/:id`. All three require `Authorization: Bearer ...`.
 
-### Grupos puros (namespace)
+### Pure groups (namespace)
 
-Un nodo sin `response` solo agrupa — no registra endpoint. Útil para reutilizar herencia:
+A node without `response` only groups — it registers no endpoint. Useful to reuse inheritance:
 
 ```json
 {
@@ -130,32 +130,32 @@ Un nodo sin `response` solo agrupa — no registra endpoint. Útil para reutiliz
 }
 ```
 
-### Reglas de herencia
+### Inheritance rules
 
-| Campo | Hereda | Cómo se combina |
+| Field | Inherits | How it combines |
 |---|---|---|
-| `url` | sí | concatenación con `/` |
-| `extensions` | sí | merge shallow (la hija sobrescribe por clave) |
-| `headers` | sí | merge (la hija gana en colisión) |
-| `method` | no | cada ruta define la suya (default `get`) |
-| `response` / `responses` | no | sin ninguno = grupo puro, no registra endpoint |
+| `url` | yes | concatenation with `/` |
+| `extensions` | yes | shallow merge (child overrides per key) |
+| `headers` | yes | merge (child wins on collision) |
+| `method` | no | each route declares its own (default `get`) |
+| `response` / `responses` | no | when both are absent, the node is a pure group and registers no endpoint |
 
-## Respuestas condicionales
+## Conditional responses
 
-Una ruta puede declarar **una** `response` (caso normal) o un array `responses[]` con reglas para elegir cuál servir. Reglas, en orden:
+A route can declare a single `response` (the normal case) or a `responses[]` array with rules that pick which one to serve. Rules, in order:
 
-1. Se recorre `responses[]` de arriba a abajo.
-2. Se devuelve la **primera** cuyo `when` coincida con el request.
-3. Una response **sin** `when` matchea siempre — usala como fallback al final.
-4. Si todas tienen `when` y ninguna matchea, mock-fast responde **404** con `{ "error": "No response matched", "route": "...", "method": "...", "url": "..." }`.
+1. `responses[]` is walked top to bottom.
+2. The **first** entry whose `when` matches the request is returned.
+3. A response **without** `when` always matches — use it as a fallback at the end.
+4. If every entry has a `when` and none matches, mock-fast responds **404** with `{ "error": "No response matched", "route": "...", "method": "...", "url": "..." }`.
 
-Las claves de `when` siguen las mismas variables que el templating: `body.X`, `query.X`, `headers.X`, `params.X`, `token.X`. Soportan dotted-paths arbitrarios (`body.user.address.city`, `body.items.0.id`).
+The keys in `when` follow the same variables as templating: `body.X`, `query.X`, `headers.X`, `params.X`, `token.X`. Arbitrary dotted paths are supported (`body.user.address.city`, `body.items.0.id`).
 
-Comparación: **igualdad con coerción a string**. `body.dni: 12345673` (número en el request) matchea contra `"12345673"` (string en la regla). Si el valor del request es un array, matchea si **algún** elemento es igual al esperado (útil para `tags`, `roles`, etc.). `null` en la regla matchea valores `null` **o** ausentes.
+Comparison: **equality with string coercion**. `body.dni: 12345673` (a number in the request) matches against `"12345673"` (a string in the rule). If the request value is an array, it matches when **any** element equals the expected primitive (handy for `tags`, `roles`, etc.). `null` in the rule matches `null` **or** missing values.
 
-Entre claves de un mismo `when` el operador es **AND implícito**. Para OR, declarálo como dos responses separadas.
+Across keys of a single `when`, the operator is **implicit AND**. For OR, declare two separate responses.
 
-`response` (singular) y `responses` (array) **no pueden coexistir** en el mismo nodo — el schema lo rechaza.
+`response` (single) and `responses` (array) **cannot coexist** on the same node — the schema rejects it.
 
 ```json
 {
@@ -186,60 +186,60 @@ Entre claves de un mismo `when` el operador es **AND implícito**. Para OR, decl
 }
 ```
 
-> **Headers son case-insensitive**: Express normaliza a minúsculas, usá `headers.x-api-key`, no `headers.X-Api-Key`.
+> **Headers are case-insensitive**: Express normalizes them to lowercase, use `headers.x-api-key`, not `headers.X-Api-Key`.
 >
-> **Sin templating en `when`**: los valores de matching son literales. El templating sigue corriendo solo sobre `body` y `headers` de la response elegida.
+> **No templating in `when`**: matcher values are literal. Templating still runs over the `body` and `headers` of the chosen response.
 >
-> **Operadores (`gt`, `regex`, `in`, ...) no están en v1**. La forma del DSL (`when: { "path": valor }`) está estable; los operadores llegarán como valores tipo objeto (`{ "body.amount": { "gt": 100 } }`) sin romper esta sintaxis.
+> **Operators (`gt`, `regex`, `in`, ...) are not in v1**. The DSL shape (`when: { "path": value }`) is stable; operators will arrive as object-typed values (`{ "body.amount": { "gt": 100 } }`) without breaking this syntax.
 
-## Extensiones
+## Extensions
 
-Cada extensión se activa al aparecer en `extensions` de una ruta (o de un padre, vía herencia). Corren en este orden:
+Each extension activates when it appears in a route's `extensions` (or a parent's, via inheritance). They run in this order:
 
 1. `requireAuth`
 2. `rateLimit`
 3. `errorRate`
 4. `delayRange`
 
-Cualquier extensión que cortocircuita (devuelve 401, 429, 500) no ejecuta las siguientes ni la respuesta normal.
+Any extension that short-circuits (returns 401, 429, 500) skips the rest and the normal response.
 
 ### `requireAuth: boolean`
 
-Verifica que el header de autenticación (`Authorization` por defecto) coincide con `auth.pattern`. Si no, **401**.
+Checks that the auth header (`Authorization` by default) matches `auth.pattern`. If not, **401**.
 
 ```json
 "extensions": { "requireAuth": true }
 ```
 
-Para apagarla en una hija que heredó `true`:
+To turn it off on a child that inherited `true`:
 
 ```json
 "extensions": { "requireAuth": false }
 ```
 
-### `errorRate: number` (entre 0 y 1)
+### `errorRate: number` (between 0 and 1)
 
-Lanza un dado por request. Con probabilidad `errorRate`, responde **500** sin llegar al body normal.
+Rolls a die per request. With probability `errorRate`, returns **500** without reaching the normal body.
 
 ```json
 "extensions": { "errorRate": 0.10 }
 ```
 
-10% de fallos. Útil para probar reintentos del cliente.
+10% failure rate. Useful for testing client retries.
 
 ### `delayRange: [min, max]`
 
-Retraso aleatorio en milisegundos antes de responder.
+Random latency in milliseconds before responding.
 
 ```json
 "extensions": { "delayRange": [200, 1500] }
 ```
 
-Cada request espera un valor uniforme en `[min, max]`. Combinable con todo.
+Each request waits a uniform value in `[min, max]`. Composes with everything else.
 
 ### `rateLimit`
 
-Cuenta peticiones por identificador y corta al pasarse. Cubre dos casos con la misma forma: límite uniforme y override por usuario.
+Counts requests per identifier and cuts off when exceeded. Covers two cases with the same shape: uniform limit and per-user override.
 
 ```json
 "extensions": {
@@ -259,40 +259,40 @@ Cuenta peticiones por identificador y corta al pasarse. Cubre dos casos con la m
 }
 ```
 
-| Campo | Default | Acepta |
+| Field | Default | Accepts |
 |---|---|---|
-| `identifier` | IP del cliente (`req.ip`) | expresión Handlebars: `{{body.x}}`, `{{headers.x}}`, `{{token.sub}}` |
+| `identifier` | client IP (`req.ip`) | Handlebars expression: `{{body.x}}`, `{{headers.x}}`, `{{token.sub}}` |
 | `window` | `"1m"` | `"1m"`, `"5m"`, `"1h"`, `"session"`, `"on-success"` |
-| `max` | requerido | número de peticiones permitidas en la ventana |
-| `perUser` | `{}` | mapa `identifier → max` (override del default) |
-| `onLimit` | `{ status: 429 }` | response completo cuando se supera |
+| `max` | required | number of requests allowed in the window |
+| `perUser` | `{}` | map `identifier → max` (overrides the default) |
+| `onLimit` | `{ status: 429 }` | full response when exceeded |
 
-**Ventanas explicadas:**
+**Windows explained:**
 
-- `"1m"`, `"5m"`, `"1h"`: ventana deslizante por tiempo.
-- `"session"`: nunca expira hasta que se reinicia el servidor.
-- `"on-success"`: el contador se resetea cuando esta misma ruta devuelve `2xx`. Sirve para simular **lockout de login**: tras N intentos fallidos, bloqueado; cuando finalmente pega uno, se libera.
+- `"1m"`, `"5m"`, `"1h"`: sliding time window.
+- `"session"`: never expires until the server restarts.
+- `"on-success"`: the counter resets when this same route returns `2xx`. Simulates **login lockout**: after N failed attempts, blocked; when one finally succeeds, it's released.
 
 ## Templating
 
-Toda string en `response.body`, `response.headers` y `headers` pasa por Handlebars antes de salir. Variables disponibles:
+Every string in `response.body`, `response.headers`, and top-level `headers` passes through Handlebars before being sent. Variables in scope:
 
-| Variable | Origen |
+| Variable | Source |
 |---|---|
-| `{{params.X}}` | path params (de `/users/:id`) |
+| `{{params.X}}` | path params (from `/users/:id`) |
 | `{{query.X}}` | querystring |
-| `{{body.X}}` | request body parseado |
+| `{{body.X}}` | parsed request body |
 | `{{headers.X}}` | request headers (lowercase) |
-| `{{token.X}}` | payload del JWT en el header de auth, decodificado sin verificar |
+| `{{token.X}}` | JWT payload from the auth header, decoded without verification |
 
 Helpers:
 
-- `{{faker 'category.method' arg1 arg2}}` — cualquier método de [@faker-js/faker](https://fakerjs.dev). Ej: `{{faker 'person.firstName'}}`, `{{faker 'number.int' min=1 max=100}}`.
-- `{{randomInt min max}}` — entero aleatorio en rango.
+- `{{faker 'category.method' arg1 arg2}}` — any [@faker-js/faker](https://fakerjs.dev) method. E.g. `{{faker 'person.firstName'}}`, `{{faker 'number.int' min=1 max=100}}`.
+- `{{randomInt min max}}` — random integer in range.
 - `{{uuid}}` — UUID v4.
-- `{{now}}` — timestamp ISO.
+- `{{now}}` — ISO timestamp.
 
-Ejemplos:
+Examples:
 
 ```json
 "response": {
@@ -306,11 +306,11 @@ Ejemplos:
 }
 ```
 
-### Decodificación del JWT
+### JWT decoding
 
-Si la ruta tiene `requireAuth` y el header trae `Bearer <jwt>`, mock-fast decodifica el payload (base64url, **sin verificar firma** — es un mock) y lo expone en `{{token.*}}`. Útil para personalizar respuestas por usuario sin pedirle al cliente que mande otro header.
+If the route has `requireAuth` and the header carries `Bearer <jwt>`, mock-fast decodes the payload (base64url, **signature not verified** — it's a mock) and exposes it as `{{token.*}}`. Useful for personalizing responses per user without asking the client to send another header.
 
-## Uso programático
+## Programmatic usage
 
 ```ts
 import { createMockFast } from "mock-fast";
@@ -332,7 +332,7 @@ API:
 interface MockFastInstance {
   start(): Promise<void>;
   stop(): Promise<void>;
-  reload(): Promise<void>;       // re-lee el DSL y aplica
+  reload(): Promise<void>;       // re-reads the DSL and applies it
   url(): string;                 // http://host:port
   adminUrl(): string;            // http://host:adminPort
 }
@@ -340,19 +340,19 @@ interface MockFastInstance {
 
 ## Hot reload
 
-Por defecto, mock-fast escucha cambios en el archivo del DSL. Cuando lo guardás, recarga rutas/colecciones sin reiniciar el proceso ni cerrar el puerto. Los contadores de `rateLimit` se resetean al recargar — es el comportamiento natural en dev.
+By default, mock-fast watches the DSL file for changes. When you save, it reloads routes/collections without restarting the process or closing the port. `rateLimit` counters reset on reload — that's the natural behavior in dev.
 
-Para apagarlo: `--no-watch` o `{ watch: false }` en la API programática.
+To turn it off: `--no-watch` or `{ watch: false }` in the programmatic API.
 
 ## Admin API
 
-Heredada de mocks-server, en `http://127.0.0.1:3110` por defecto. Endpoints útiles:
+Inherited from mocks-server, at `http://127.0.0.1:3110` by default. Useful endpoints:
 
-- `GET /api/mock/routes` — lista de rutas.
-- `GET /api/mock/collections` — colecciones.
-- Swagger UI en `/docs`.
+- `GET /api/mock/routes` — list of routes.
+- `GET /api/mock/collections` — collections.
+- Swagger UI at `/docs`.
 
-## Ejemplo completo
+## Complete example
 
 ```json
 {
@@ -390,7 +390,7 @@ Heredada de mocks-server, en `http://127.0.0.1:3110` por defecto. Endpoints úti
           }
         },
         {
-          "url": "/protegida",
+          "url": "/protected",
           "extensions": {
             "requireAuth": true,
             "errorRate": 0.10,
@@ -400,7 +400,7 @@ Heredada de mocks-server, en `http://127.0.0.1:3110` por defecto. Endpoints úti
           "routes": [
             {
               "id": "users-list",
-              "url": "/usuarios",
+              "url": "/users",
               "response": {
                 "status": 200,
                 "body": {
@@ -420,15 +420,15 @@ Heredada de mocks-server, en `http://127.0.0.1:3110` por defecto. Endpoints úti
 
 ## Roadmap
 
-Próximas extensiones planeadas (la arquitectura las admite con un archivo nuevo en `src/extensions/`):
+Planned next extensions (the architecture supports them with a single new file in `src/extensions/`):
 
-- **Variants / scenarios**: cambiar respuestas en bloque vía admin API.
-- **Operadores de matching** en `when`: `{ "body.amount": { "gt": 100 } }`, `regex`, `in`, etc. — el shorthand actual (igualdad directa) sigue funcionando.
-- **CRUD automático**: declarar `"crud": true` y obtener GET / POST / PUT / DELETE sobre una colección en memoria.
-- **Proxy fallback**: rutas no definidas pasan a un backend real.
-- **Request schema validation**: 400 si el body no encaja en un schema JSON.
-- **Rate limit avanzado**: distribuciones de ventana, métricas.
+- **Variants / scenarios**: switch responses in bulk via the admin API.
+- **Matching operators** in `when`: `{ "body.amount": { "gt": 100 } }`, `regex`, `in`, etc. — the current shorthand (direct equality) keeps working.
+- **Automatic CRUD**: declare `"crud": true` and get GET / POST / PUT / DELETE over an in-memory collection.
+- **Proxy fallback**: undefined routes fall through to a real backend.
+- **Request schema validation**: 400 when the body doesn't fit a JSON schema.
+- **Advanced rate limit**: window distributions, metrics.
 
-## Licencia
+## License
 
 MIT
