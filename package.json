@@ -1,0 +1,64 @@
+{
+  "name": "@killki/mock-fast",
+  "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "Zero-config mock server with a small, scalable DSL: nested routes, auth, error injection, latency, per-user rate limiting.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "mock-fast": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "SKILL.md"
+  ],
+  "keywords": [
+    "mock",
+    "mock-server",
+    "api",
+    "rest",
+    "testing",
+    "development",
+    "dsl",
+    "faker",
+    "rate-limit",
+    "auth",
+    "cli"
+  ],
+  "scripts": {
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build:ts": "tsc -p tsconfig.json",
+    "build:skill": "node -e \"const fs=require('fs');fs.mkdirSync('dist/mock-fast',{recursive:true});fs.copyFileSync('SKILL.md','dist/mock-fast/SKILL.md')\"",
+    "build": "npm run clean && npm run build:ts && npm run build:skill",
+    "dev": "tsx src/cli.ts start",
+    "start": "node ./dist/cli.js start",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build",
+    "ship": "npm version patch && npm publish",
+    "ship:minor": "npm version minor && npm publish",
+    "ship:major": "npm version major && npm publish"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^9.0.0",
+    "@mocks-server/main": "^4.1.0",
+    "handlebars": "^4.7.8",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^2.0.0"
+  }
+}

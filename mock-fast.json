@@ -1,0 +1,104 @@
+{
+  "server": {
+    "port": 3001,
+    "host": "127.0.0.1",
+    "cors": true
+  },
+  "auth": {
+    "headerName": "Authorization",
+    "pattern": "^Bearer [A-Za-z0-9._-]+$"
+  },
+  "routes": [
+    {
+      "id": "health",
+      "url": "/health",
+      "response": { "status": 200, "body": { "ok": true, "ts": "{{now}}" } }
+    },
+    {
+      "url": "/api",
+      "routes": [
+        {
+          "id": "login",
+          "url": "/login",
+          "method": "post",
+          "extensions": {
+            "rateLimit": {
+              "identifier": "{{body.username}}",
+              "window": "on-success",
+              "max": 3,
+              "onLimit": {
+                "status": 423,
+                "body": { "error": "Account temporarily locked" }
+              }
+            }
+          },
+          "response": {
+            "status": 200,
+            "body": {
+              "token": "Bearer mock.{{faker 'string.uuid'}}",
+              "user": "{{body.username}}"
+            }
+          }
+        },
+        {
+          "url": "/protegida",
+          "extensions": {
+            "requireAuth": true,
+            "errorRate": 0.10,
+            "delayRange": [100, 500]
+          },
+          "response": {
+            "status": 200,
+            "body": { "data": "root protegido" }
+          },
+          "routes": [
+            {
+              "id": "users-list",
+              "url": "/usuarios",
+              "response": {
+                "status": 200,
+                "body": {
+                  "users": [
+                    { "id": 1, "name": "{{faker 'person.firstName'}}" },
+                    { "id": 2, "name": "{{faker 'person.firstName'}}" }
+                  ]
+                }
+              }
+            },
+            {
+              "id": "users-byId",
+              "url": "/usuarios/:id",
+              "response": {
+                "status": 200,
+                "body": {
+                  "id": "{{params.id}}",
+                  "name": "{{faker 'person.fullName'}}",
+                  "tokenSub": "{{token.sub}}"
+                }
+              }
+            },
+            {
+              "id": "users-limited",
+              "url": "/usuarios/:id/limited",
+              "extensions": {
+                "rateLimit": {
+                  "identifier": "{{token.sub}}",
+                  "window": "1m",
+                  "max": 5,
+                  "perUser": {
+                    "user-vip": 100,
+                    "user-locked": 0
+                  }
+                }
+              },
+              "response": {
+                "status": 200,
+                "body": { "info": "rate-limited per user" }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
