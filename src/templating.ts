@@ -17,7 +17,14 @@ hb.registerHelper("faker", function (path: string, ...rest: unknown[]) {
     }
   }
   if (typeof cursor === "function") {
-    const args = rest.slice(0, -1);
+    const last = rest[rest.length - 1];
+    const positional = rest.slice(0, -1);
+    const hash =
+      last && typeof last === "object" && "hash" in (last as object)
+        ? (last as { hash?: Record<string, unknown> }).hash
+        : undefined;
+    const args =
+      hash && Object.keys(hash).length > 0 ? [...positional, hash] : positional;
     try {
       return (cursor as (...a: unknown[]) => unknown)(...args);
     } catch {
