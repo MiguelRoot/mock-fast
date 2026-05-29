@@ -1,0 +1,14 @@
+description: >
+  Estado del servicio. Demuestra un ROUTE GROUP: la carpeta (publico) agrupa
+  pero NO aporta segmento de URL ni auth. Ruta efectiva: /api + (publico:nada) + /estado = /api/estado.
+method: GET
+# path por defecto = nombre de carpeta → /estado
+auth: none
+behavior:
+  latency_ms: [50, 200]
+cases:
+  ok:
+    response: response-200.json
+    status: 200
+dynamic:
+  "ts": "{{now}}"

@@ -1,17 +1,21 @@
 {
   "server": { "port": 3001, "host": "127.0.0.1", "cors": true },
+  "auth": { "headerName": "Authorization", "pattern": "^Bearer [A-Za-z0-9._-]+$" },
   "routes": [
     {
-      "id": "autenticacion",
       "url": "/autenticacion-mobile-service/autenticacion",
       "method": "post",
+      "extensions": {
+        "rateLimit": {
+          "identifier": "{{body.usuario}}",
+          "window": "on-success",
+          "max": 3,
+          "onLimit": { "status": 423, "body": { "error": "Cuenta temporalmente bloqueada" } }
+        }
+      },
       "responses": [
         {
-          "when": {
-            "body.usuario": "jperez",
-            "body.contrasena": "test1234",
-            "body.totp": null
-          },
+          "when": { "body.usuario": "jperez", "body.contrasena": "test1234", "body.totp": null },
           "status": 200,
           "body": {
             "code": 200,
@@ -34,11 +38,7 @@
           }
         },
         {
-          "when": {
-            "body.usuario": "jperez",
-            "body.contrasena": "test1234",
-            "body.totp": "123456"
-          },
+          "when": { "body.usuario": "jperez", "body.contrasena": "test1234", "body.totp": "123456" },
           "status": 200,
           "body": {
             "code": 200,
@@ -86,6 +86,90 @@
             "message": "Credenciales inválidas",
             "timestamp": "{{now}}"
           }
+        }
+      ]
+    },
+
+    {
+      "url": "/api",
+      "routes": [
+        {
+          "url": "/estado",
+          "method": "get",
+          "extensions": { "delayRange": [50, 200] },
+          "response": {
+            "status": 200,
+            "body": { "status": "ok", "version": "1.0.0", "ts": "{{now}}" }
+          }
+        },
+
+        {
+          "url": "/protegida",
+          "extensions": { "requireAuth": true, "errorRate": 0.05, "delayRange": [100, 400] },
+          "routes": [
+            {
+              "url": "/perfil",
+              "method": "get",
+              "response": {
+                "status": 200,
+                "body": {
+                  "code": 200,
+                  "data": {
+                    "username": "jperez",
+                    "nombres": "JUAN",
+                    "sessionId": "{{uuid}}",
+                    "roles": ["admin"]
+                  },
+                  "timestamp": "{{now}}"
+                }
+              }
+            },
+            {
+              "url": "/pricing",
+              "method": "get",
+              "extensions": { "requireAuth": false },
+              "response": {
+                "status": 200,
+                "body": { "free": 0, "pro": 9.99, "enterprise": null }
+              }
+            },
+            {
+              "url": "/usuarios",
+              "method": "get",
+              "response": {
+                "status": 200,
+                "body": { "data": [ { "id": 1, "nombre": "Juan" }, { "id": 2, "nombre": "Ana" } ] }
+              },
+              "routes": [
+                {
+                  "url": "/:id",
+                  "method": "get",
+                  "responses": [
+                    {
+                      "when": { "params.id": "1" },
+                      "status": 200,
+                      "body": { "id": 1, "nombre": "Juan", "email": "jperez@example.com" }
+                    },
+                    {
+                      "status": 404,
+                      "body": { "code": 404, "error": "Usuario no encontrado" }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "url": "/archivos/*",
+              "method": "get",
+              "response": {
+                "status": 200,
+                "body": {
+                  "ruta": "{{params.[0]}}",
+                  "url": "https://cdn.example.com/{{params.[0]}}"
+                }
+              }
+            }
+          ]
         }
       ]
     }

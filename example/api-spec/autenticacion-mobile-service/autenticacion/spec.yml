@@ -1,9 +1,18 @@
 description: Login con flujo de 2 pasos sobre la misma URL.
 
+# URL derivada de las carpetas: /autenticacion-mobile-service/autenticacion
 method: POST
-path: /autenticacion-mobile-service/autenticacion
 auth: none
 
+# behavior → extensiones del mock. Aquí: lockout de login tras 3 intentos sin éxito.
+behavior:
+  rate_limit:
+    by: "{{body.usuario}}"
+    window: on-success
+    max: 3
+    on_limit: { status: 423, body: { error: "Cuenta temporalmente bloqueada" } }
+
+# responses[] condicionales: match → when ; el caso sin match es el fallback.
 cases:
   step1:
     when: body.totp es null y credenciales válidas
@@ -22,15 +31,14 @@ cases:
     response: response-401.json
     status: 401
 
+# dynamic: campos volátiles. La fixture lleva valor concreto; aquí vive la expresión.
 dynamic:
   "timestamp": "{{now}}"
   "data.aplicaciones.0.token": "Bearer mock.{{uuid}}"
 
 request_constraints:
-  - "`aplicaciones` debe ser el array estático `[\"VS\"]`"
+  - "`aplicaciones` debe ser el array estático `[\"VS\"]` (se recibe, no se ramifica por él)"
 
 notes:
   - "`usuario.fecRegistro` suele venir null"
-  - "`usuario.roles` viene null en lo observado; shape sin confirmar"
-  - "`aplicaciones[].perfilesDetails` siempre null, se ignora"
-  - "Formato del 401 tentativo, confirmar con backend"
+  - "`aplicaciones[].perfilesDetails` siempre null, candidato a ignorar"

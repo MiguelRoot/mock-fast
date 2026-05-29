@@ -1,0 +1,10 @@
+description: Perfil del usuario autenticado. HEREDA auth: bearer (y behavior) de protegida.
+method: GET
+# auth: (heredado bearer)  ·  path por defecto → /perfil  ·  efectivo: /api/protegida/perfil
+cases:
+  ok:
+    response: response-200.json
+    status: 200
+dynamic:
+  "data.sessionId": "{{uuid}}"
+  "timestamp": "{{now}}"

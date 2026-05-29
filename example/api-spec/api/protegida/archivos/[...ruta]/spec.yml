@@ -1,0 +1,12 @@
+description: >
+  Descarga de archivos — ruta CATCH-ALL. archivos/ (literal) + [...ruta] (catch-all)
+  → /api/protegida/archivos/*. El valor del comodín se lee con {{params.[0]}} (corchetes).
+  Se emite AL FINAL (las rutas específicas ganan).
+method: GET
+cases:
+  ok:
+    response: response-200.json
+    status: 200
+dynamic:
+  "ruta": "{{params.[0]}}"
+  "url": "https://cdn.example.com/{{params.[0]}}"

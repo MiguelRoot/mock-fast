@@ -21,17 +21,28 @@ This skill is an **optional abstraction layer** over [`mock-fast`](../mock-fast/
 
 The raw `.json` files are the **captured truth** — treat them as read-only fixtures. `spec.yml` and `mock-fast.json` are *derived* from them. Never quietly rewrite a capture to make generation easier; if a capture is wrong, say so.
 
-### Direction of truth (one-way)
+### The JSON is the hub (two-way sync, one direction per change)
+
+The `api-spec/` JSON is the **central point of communication** — the friendly surface the user reads, edits, and controls. `mock-fast.json` is the live server kept **in sync** with it. Sync runs **both ways**, but it is always **user-directed**: the user declares which side changed, and the agent reflects it to the other. There is no automatic sync.
 
 ```
-api-spec/  (captures + spec.yml)   ──generate──▶   mock-fast.json
-        THE SOURCE OF TRUTH                        a derived artifact
+api-spec/  (JSON: captures + spec.yml)   ◀──sync (user-directed)──▶   mock-fast.json
+        the hub the user controls                                     the live mock server
 ```
 
-- **`api-spec/` is authoritative.** `mock-fast.json` is **generated** from it and should be treated as build output: don't hand-edit it as an input, don't read it back as a fact. To change behavior, change the captures/`spec.yml` and regenerate.
-- **The reverse (Mode C) is the single exception** where `mock-fast.json` is read as input — and only to *bootstrap* the source of truth that doesn't exist yet. It is **not** part of the steady-state loop.
-- Therefore reverse runs **once**: the first time (no `api-spec/` exists), or when the user asks for it **explicitly**. After `api-spec/` exists, never auto-reverse — that would let the generated artifact overwrite its own source.
-- If you notice `mock-fast.json` was hand-edited and now **drifts** from `api-spec/`, do **not** silently import the change back. Surface the drift and ask: the fix is almost always to update the capture/`spec.yml` and regenerate, not to reverse.
+Typical directions (the user picks per action):
+
+| Situation | Direction | Mode |
+|---|---|---|
+| Something **new** | add behavior in `mock-fast.json`, then generate its JSON | mock-fast → JSON (Mode C / fill-gaps) |
+| **Modify** an endpoint that already has JSON | edit the JSON, reflect into `mock-fast.json` | JSON → mock-fast (Modes A/B) |
+| User hand-edited the JSON | "update the mock" | JSON → mock-fast (Mode B) |
+
+**The one rule that prevents chaos: one direction per change.** A given change is authored on **one** side, and the agent regenerates the **other** side from it. Don't hand-edit both sides for the same change and expect reconciliation — that's the only way to create conflicting "truths".
+
+- Prefer the **JSON** as the place to author and review changes (it's the hub). Editing `mock-fast.json` directly is fine too — especially for brand-new endpoints — as long as you then sync the JSON from it.
+- The two are **complementary**: if one side has data the other lacks, **derive it** (don't make the user retype).
+- If both sides were independently hand-edited and now **conflict**, do **not** guess a winner — surface the conflict and ask the user which side is correct, then sync that direction.
 
 ## Directory layout
 
@@ -46,7 +57,65 @@ api-spec/  (captures + spec.yml)   ──generate──▶   mock-fast.json
         └── response-<code>-<variant>.json ← captured responses (required)
 ```
 
-`<endpoint-name>` is a free folder name (`autenticacion`, `perfil`, `documentos`). `<variant>` is a free id (`step1`, `step2`, `unauthorized`, `not_found`).
+**The folder path IS the URL** — `<endpoint-name>/` is a URL segment (`autenticacion/` → `/autenticacion`); nest folders for deeper paths (next section). There is **no `path` field** — one rule, like Next.js. `<variant>` is a free id (`step1`, `step2`, `unauthorized`, `not_found`).
+
+## Folders are the URL (the route tree)
+
+mock-fast is a **tree with inheritance**: URLs concatenate and `extensions`/`headers` inherit from the parent. The `api-spec/` folders mirror that tree **1:1** — the folder path is the URL, at any depth. This is the **single rule** for routing (no `path` override, exactly like Next.js / Astro / ASP.NET file-routing). A one-segment endpoint is just depth 1; nest deeper for longer paths, and nest a subtree when it **shares auth** (declare the token guard once on the parent, children inherit).
+
+```
+api-spec/
+└── api/
+    ├── _group.yml              ← namespace node: segment "/api", no endpoint of its own
+    └── protegida/
+        ├── _group.yml          ← segment "/protegida" + auth: bearer   ← the guard lives here
+        ├── spec.yml            ← /api/protegida is ALSO an endpoint (optional)
+        ├── usuarios/
+        │   └── spec.yml        ← inherits auth from protegida
+        └── [id]/
+            └── spec.yml        ← path segment ":id" (dynamic)
+```
+
+### Folder-name conventions
+
+| Folder | Means | mock-fast `url` | Notes |
+|---|---|---|---|
+| `usuarios/` | literal segment | `/usuarios` | — |
+| `[id]/` | dynamic param | `:id` | read as `{{params.id}}` |
+| `[...rest]/` | catch-all (matches remaining path) | `*` | read as `{{params.[0]}}`; **emit last** (more specific routes win) |
+| `[[...rest]]/` | **optional** catch-all (matches the base path **and** any subpath) | `/base` + `/base/*` (**two** routes) | mock-fast can't do both in one route; emit the base node and a `/*` node sharing the same response. Both **last**. |
+| `(grupo)/` | route **group**: shares config with children but adds **no** URL segment | — | for "protect several routes that share no common prefix" |
+| `_privado/` | **ignored** by routing (shared fixtures, fragments, docs) | — | not an endpoint |
+
+### The folder name IS the segment (Next.js style); files are optional
+
+- The **folder name** determines the URL segment automatically: `usuarios/`→`/usuarios`, `[id]/`→`/:id`, `[...rest]/`→`/*`, `(grupo)/`→nothing. No file is needed just to add a segment.
+- A folder with **neither** `spec.yml` nor `_group.yml` is a pure organizational namespace (it only contributes its segment).
+
+### Reserved files in a folder
+
+- **`spec.yml`** — this folder **is** an endpoint (the "page"). There is **no `path` field** — the URL is the folder path. `auth` is optional (defaults to the inherited value; set it only to **override**). A folder may have both a `spec.yml` and child folders (a node that responds *and* has children).
+- **`_group.yml`** — attaches **shared config** to this folder's subtree (the "layout"): `auth`, `behavior`, `headers`. **No `cases`, no `path`.** Add it only when there's something to share (e.g. the auth guard); a plain folder doesn't need one.
+
+### Inheritance rules (mirror mock-fast)
+
+- **URL**: effective URL = the folder-name segments of every ancestor joined with this node's. A `(grupo)/` folder contributes **no** segment.
+- **`auth` / `behavior` / `headers`**: inherit from the nearest ancestor `_group.yml`; a child **overrides** per key. `auth: none` on a child disables an inherited guard (like `requireAuth: false`).
+- In the **review**, always surface what a node *inherits* ("`/api/protegida/usuarios` inherits `auth: bearer` from `protegida`") so the user never has to trace the chain by hand.
+
+### Generation, reverse, and moving
+
+- **Generate**: nested folders → nested `routes[]`, with the parent node carrying the shared `extensions` (more faithful than the flat output, which repeats `auth` on every route). Catch-all (`[...rest]`) and any `/*` fallback are emitted **last**.
+- **Reverse**: **preserve the tree** (don't flatten). A namespace node → a `_group.yml`; `:id` → `[id]/`; `*` → `[...rest]/`; a no-URL grouping → `(grupo)/`. A base route `/x` **plus** a sibling `/x/*` with the same response → collapse to one `[[...rest]]/` (optional catch-all).
+- **Move / add / remove** a folder = move/add/remove the route; recompute the inherited URL + `auth`, then regenerate `mock-fast.json`. Moving a folder **out** of a protected parent means it stops inheriting the token — exactly the intent. Structural moves go through the review checkpoint (user-directed, one direction per change).
+
+### Caveats (verified against the engine)
+
+- Catch-all uses the **star** form (`/files/*`, `/*`) — the regex form `/(.*)` is **not** reliable; don't emit it.
+- A single `*` route matches subpaths but **not** the base (`/shop/*` ✓ `/shop/a` ✗ `/shop`). The **optional** catch-all (`[[...rest]]`) therefore needs **two** routes — `/shop` and `/shop/*` — sharing the same response. (Verified: both return 200.)
+- The wildcard value reads with **bracket** syntax: `{{params.[0]}}` (a bare `{{params.0}}` renders literally — same gotcha as array indexes).
+- `(grupo)` and `_privado` are **api-spec organizational** ideas; they don't survive into `mock-fast.json` as folders — they only affect how routes/extensions are grouped and which paths are emitted.
+- ASP.NET-style **typed constraints** (`[id:int]`, `{id:guid}`) are **documentation only** — mock-fast does **not** enforce them. Record them in `notes`/`request_constraints`, never claim the mock validates the type.
 
 ## `spec.yml` schema
 
@@ -54,14 +123,15 @@ api-spec/  (captures + spec.yml)   ──generate──▶   mock-fast.json
 |---|---|---|---|
 | `description` | string | no | comment only |
 | `method` | `GET\|POST\|PUT\|PATCH\|DELETE` | yes | route `method` |
-| `path` | string | yes | route `url` (relative to BASE_URL) |
-| `auth` | `none\|bearer` | yes | `extensions.requireAuth` (`bearer`→`true`) |
+| `auth` | `none\|bearer` | yes* | `extensions.requireAuth` (`bearer`→`true`) |
 | `headers` | `map<string,string>` | no | route `headers` |
 | `cases` | `map<variant, case>` | yes | `response` or `responses[]` |
 | `behavior` | `map` | no | `extensions` (see below) |
 | `dynamic` | `map<dotpath, handlebars>` | no | templating on the chosen response body |
 | `request_constraints` | `list<string>` | no | doc only (static rules) |
 | `notes` | `list<string>` | no | doc only (shape facts) |
+
+There is **no `path` field**: the route `url` is the **folder path** (one rule, like Next.js). `*auth` is required only when there's no ancestor to inherit it from; under a subtree it defaults to the inherited value.
 
 ### The `case` object
 
@@ -101,9 +171,10 @@ dynamic:
 
 ### Minimal valid spec
 
+`api-spec/algo/spec.yml` (the folder `algo/` is the URL `/algo`):
+
 ```yaml
 method: GET
-path: /algo
 auth: bearer
 cases:
   ok:
@@ -121,10 +192,10 @@ cases:
 Trigger: *"agregué un endpoint / pegué estos JSON en `api-spec/<x>/`, creá el spec"*.
 
 1. **Read** every `*.json` in `api-spec/<endpoint>/`. Classify request vs response (filename `request-*` / `response-*`, else by content / by having a status-like shape).
-2. **Infer** `spec.yml` using the rules below. For anything not derivable from the JSON (notably `path` and `method` — they are NOT in the body), insert a clearly-marked `TODO` and ask, rather than guessing.
+2. **Infer** `spec.yml` using the rules below. The **URL comes from the folder path** the user placed the files in (no `path` field). `method` is not in the body — infer it (POST/PUT/PATCH if there's a request body, else GET) or ask. For anything else not derivable, insert a `TODO` and ask rather than guessing.
 3. **Write the draft `spec.yml`**, then **STOP**. Summarize: the cases you found, the `match` selectors you chose and why, the fields you flagged nullable, and every open question. Do **not** touch `mock-fast.json`.
 4. User edits the `spec.yml` and/or replies "procedé".
-5. **Phase 2:** generate the route, **merge** it into `mock-fast.json` (add, or replace the route with the same id/path; preserve everything else), validate against mock-fast's DSL rules, report.
+5. **Phase 2:** generate the route, **merge** it into `mock-fast.json` (add, or replace the route with the same `method`+`url`; preserve everything else), validate against mock-fast's DSL rules, report.
 
 ### Mode B — modified endpoint
 
@@ -139,14 +210,16 @@ Trigger: *"modifiqué la ruta /autenticacion"* or the user edited a `response-*.
 
 Trigger: *"ya tengo un mock-fast.json, generame el api-spec"* / *"convertí mi mock existente en specs"* / *"importá / hacé reverse"*. This is the **inverse** of phases 1–2: the mock already exists; you bootstrap the source-of-truth layer **from** it.
 
-**When this is allowed (see _Direction of truth_):** Mode C is a **one-time bootstrap**, not part of the loop. Run it only when **no `api-spec/` exists yet** for the endpoint(s), or when the user **explicitly** asks to import/reverse. Once `api-spec/` exists it is authoritative — do **not** reverse automatically, and never in response to a `mock-fast.json` edit (that edit is drift to surface, not input to import). If `api-spec/` already exists and the user asks to re-import, confirm first: re-import overwrites the source of truth with output derived from the artifact.
+**When this is allowed (see _The JSON is the hub_):** reverse is **user-directed**, never automatic. Run it when the user declares the change started on the `mock-fast.json` side — e.g. *"I added/edited this endpoint in the mock, now generate/update its JSON"* — or asks to bootstrap a whole tree that has no `api-spec/` yet. Don't reverse on your own initiative just because you noticed the mock changed; wait for the user to point the direction. If reverse would **overwrite** existing JSON that the user didn't say to replace, confirm first (it's their hub — don't clobber it silently). Adding a *missing* fixture is always fine (see **Filling gaps**).
+
+**Filling gaps (non-destructive):** a narrower, always-allowed use of reverse — when `api-spec/` exists but a fixture is **missing** (a `case` references a `request-*.json`/`response-*.json` that isn't on disk) and the data **is** present in `mock-fast.json`, generate the missing file from the mock. This only *adds* what's absent; it never overwrites a fixture that already exists. The api-spec and the mock are complementary: if one side has data the other lacks, derive it rather than asking the user to retype it.
 
 1. **Read** the existing `mock-fast.json` and flatten its route tree (resolve URL concatenation and inherited `extensions`/`headers`, exactly as the mock engine does — a child of a `requireAuth` parent is `auth: bearer`).
 2. For **each route that registers an endpoint** (has `response` or `responses`; pure namespace nodes are skipped), create `api-spec/<endpoint>/` and reverse-map it to a `spec.yml` + fixture files using the **Reverse rules** below.
-3. **Stop for review.** This is a **draft**: bodies came from the mock's own templates, not from a real capture, so flag every templated/synthesized field as needing confirmation. Present the tree you'd create (folders, files, open questions). Do **not** overwrite an existing `api-spec/<endpoint>/` without saying so.
+3. **Stop for review.** This is a **draft**: templated fields were **materialized** to representative sample values (not real captures), so flag them for confirmation. Present the tree you'd create (folders, files, open questions). Do **not** overwrite an existing `api-spec/<endpoint>/` without saying so.
 4. On approval, **write** the `api-spec/` tree. From here the forward flow (Modes A/B) takes over: the user edits captures and re-syncs.
 
-> Import produces a **seed** spec, not ground truth. A `mock-fast.json` body like `"{{faker 'person.firstName'}}"` has no real captured value — keep the expression, lift it into `dynamic`, and add a note to replace it with a real capture. Never present a reverse-import as if it were observed traffic.
+> Import produces a **seed** spec, not ground truth. A `mock-fast.json` body like `"{{faker 'person.firstName'}}"` has no real captured value — **materialize** it to a concrete sample in the fixture, lift the expression into `dynamic`, and note that the value should be replaced with a real capture. The fixture never holds Handlebars. Never present a reverse-import as if it were observed traffic.
 
 ## Inference rules (JSON → spec.yml)
 
@@ -161,7 +234,7 @@ Trigger: *"ya tengo un mock-fast.json, generame el api-spec"* / *"convertí mi m
 | a field that is `null` in **every** capture | note: "`X` siempre null, candidato a ignorar" — flag, don't drop silently |
 | `Authorization` header present on the request | `auth: bearer` |
 | no auth header anywhere | `auth: none` (add a note if unsure) |
-| `method` / `path` | **not in the body** — ask the user or leave a `TODO` |
+| the **URL** | comes from the **folder path** (no `path` field); `method` not in body → infer (body present → POST) or ask |
 | a `timestamp`/`token`/uuid-looking field | propose it under `dynamic` (`{{now}}` / `{{uuid}}`) in the review summary |
 
 When picking `match` selectors, choose the **fewest fields that uniquely separate the cases** — usually the discriminator plus the credential fields that distinguish success from the fallback. More keys = stricter AND.
@@ -173,8 +246,9 @@ When picking `match` selectors, choose the **fewest fields that uniquely separat
 - `auth: bearer` → `extensions.requireAuth: true`.
 - `behavior.latency_ms` → `delayRange`; `behavior.error_rate` → `errorRate`; `behavior.rate_limit` → `rateLimit` (`by`→`identifier`, `window`/`max`/`per_user`→`perUser`/`on_limit`→`onLimit`).
 - `dynamic` → splice each Handlebars expression into the response body at its dotted path before emitting.
-- `response` body is otherwise copied **verbatim** from the captured `.json`.
-- `path` → route `url`; if several specs share a prefix and the same `auth`, you MAY nest them under a grouping node and hoist `requireAuth` — but that's an optimization you propose, never a requirement.
+- **Parity (strict):** the emitted `body` must EQUAL the fixture `.json` with **only** the `dynamic` paths substituted. Copy it **verbatim** — never trim, reorder, rename, or "simplify" fields. If `body` and the fixture diverge in any non-`dynamic` field, that's a bug.
+- **Never emit an `id`.** The route's identity is its **path** (Next.js style); mock-fast auto-derives the id from `method`+`url`. One less knob to set and keep in sync.
+- **folder path** → route `url` (segments concatenated down the tree). Create an intermediate route node only when it carries shared `extensions` or groups 2+ children; otherwise collapse the segments into one node's `url`.
 
 ## Reverse rules (existing `mock-fast.json` → spec.yml + fixtures) — Mode C
 
@@ -182,18 +256,34 @@ The mirror of the translation table. Work on the **flattened** route (parent URL
 
 | In `mock-fast.json` | Reverse to |
 |---|---|
-| route `method` + resolved `url` | `method` + `path` |
+| route `method` + resolved `url` | `method` + the **folder path** (each URL segment a folder; no `path` field) |
 | `extensions.requireAuth: true` (own or inherited) | `auth: bearer`; absent/`false` → `auth: none` |
 | `extensions.delayRange` / `errorRate` / `rateLimit` | `behavior.latency_ms` / `error_rate` / `rate_limit` |
 | single `response` | one `case` `ok`; `response.body` → `response-<status>.json`; `status` from `response.status` |
 | `responses[]` entry **with** `when` | a `case` with `match` = the `when`; `body` → `response-<code>-<variant>.json` |
 | `responses[]` entry **without** `when` | the **fallback** `case` (no `match`, ordered last) |
 | a `when` made of `body.*` keys | synthesize `request-<variant>.json` by un-flattening those dotted paths (`body.usuario`→`{usuario:...}`); `query.*`/`headers.*`/`params.*`/`token.*` matchers go in `notes`, not the request body |
-| a body field whose value is a Handlebars expression (`{{now}}`, `{{uuid}}`, `{{faker ...}}`, `{{body.x}}`) | add it to `dynamic`; keep the expression in the fixture and add a note "seed — replace with real capture" |
+| a numeric segment in a path (`body.aplicaciones.0`) | un-flatten it into an **array**: `body.aplicaciones.0: "VS"` → `{ aplicaciones: ["VS"] }`. The `.N` proves the field is a list. |
+| a **bare** primitive matcher (`body.aplicaciones: "VS"`) | **ambiguous** — mock-fast matches a primitive against either a scalar OR any array element, so the field could be `"VS"` **or** `["VS"]`. Still **generate** the fixture (default to the scalar), but **flag it**: "`aplicaciones` could be an array — confirm." Never drop the field, and never claim certainty. |
+| a body field whose value is a Handlebars expression (`{{now}}`, `{{uuid}}`, `{{faker ...}}`, `{{body.x}}`) | **Never copy the expression into the fixture** — templating is mock-server logic, not contract data. **Materialize** it to a concrete representative value in the fixture, and record the expression in `spec.yml` → `dynamic` (path → expression). See materialization rules below. |
 | route `headers` (resolved) | `headers` |
-| route `id` or last URL segment | the `<endpoint>` folder name |
+| route's last URL segment | the `<endpoint>` folder name (no `id` exists — the path is the identity) |
 
 **Variant naming** (no filenames exist to copy from): single response → `ok`; for `responses[]`, name 2xx entries by the distinguishing `when` field/value (or `ok1`, `ok2`), and name the fallback / error entries by status (`401`→`unauthorized`, `403`→`forbidden`, `404`→`not_found`, `409`→`conflict`, `422`→`unprocessable`, `423`→`locked`, else `error<code>`). Keep names stable so a later re-import is a clean diff.
+
+### Materialization (templating → concrete fixture value)
+
+**No Handlebars ever lands in an api-spec `.json`.** A fixture is observed/contract data; templating is mock-server logic. When reverse-generating a fixture from a templated mock field, write a **concrete, representative** value and move the expression to `spec.yml` → `dynamic`:
+
+| Mock field value | Fixture value (concrete) | `dynamic` entry |
+|---|---|---|
+| `{{faker 'string.alphanumeric' length=120}}` | a real-looking 120-char alphanumeric string | `"<path>": "{{faker 'string.alphanumeric' length=120}}"` |
+| `{{faker 'person.firstName'}}` | a plausible name, e.g. `"Juan"` | the faker expression |
+| `{{uuid}}` | a sample UUID, e.g. `"3f2504e0-4f89-41d3-9a0c-0305e82c3301"` | `{{uuid}}` |
+| `{{now}}` | a concrete ISO timestamp | `{{now}}` |
+| `{{body.x}}` / `{{params.x}}` (echo) | the **same value** the synthesized request/params hold (so request and response agree) | the echo expression |
+
+The fixture value is a **representative sample, not a real capture** — note that in the review so the user can replace it with a true capture. The round-trip is clean: forward generation re-reads `dynamic` and puts the expression back into `mock-fast.json`, while the `.json` stays plain data.
 
 ## Limits to surface (the matcher is weaker than prose)
 
@@ -212,7 +302,7 @@ Ground every suggestion in what's observable; don't invent endpoints or methods 
 
 | You observe | Likely missing case to suggest |
 |---|---|
-| `path` contains a path param (`:id`, `/{id}`) and no `404` case | `404 not_found` for an unknown id |
+| the URL has a path param (an `[id]/` folder → `:id`) and no `404` case | `404 not_found` for an unknown id |
 | `auth: bearer` but no `401` case captured | `401 unauthorized` with the API's real body (mock-fast's `requireAuth` returns a *generic* 401 — capture the real shape if it differs) |
 | `POST`/`PUT`/`PATCH` with a request body and no `400`/`422` case | `400`/`422` for malformed or missing required fields |
 | only success cases, **no fallback** (`match`-less case) | a fallback — otherwise any non-matching request gets mock-fast's generic `404 "No response matched"`, not your shape |
@@ -224,14 +314,14 @@ Frame each as "el mock hoy no maneja X — ¿lo agrego?" and note whether mock-f
 
 ## Worked example — `autenticacion` (real, end to end)
 
-**Captured input** (`api-spec/autenticacion/`): two requests differing only in `totp` (`null` vs `"123456"`), two `200` responses, one `401`.
+**Captured input** (`api-spec/autenticacion-mobile-service/autenticacion/` — the folder path is the URL): two requests differing only in `totp` (`null` vs `"123456"`), two `200` responses, one `401`.
 
 **Phase 1 — inferred `spec.yml`:**
 
 ```yaml
 description: Login con flujo de 2 pasos sobre la misma URL.
+# URL = folder path → /autenticacion-mobile-service/autenticacion
 method: POST
-path: /autenticacion-mobile-service/autenticacion
 auth: none
 
 cases:
@@ -262,13 +352,12 @@ notes:
   - "Formato del 401 tentativo, confirmar con backend"
 ```
 
-*Review summary you'd present:* 3 cases; `match` separates step1/step2 by `body.totp`; `unauthorized` is the fallback (the matcher can't express "invalid", so anything not matching the two success selectors returns 401); `timestamp`/`token` proposed as dynamic; `roles`/`perfilesDetails` flagged null. **Open question:** confirm `path`/`method` and the 401 shape.
+*Review summary you'd present:* 3 cases; `match` separates step1/step2 by `body.totp`; `unauthorized` is the fallback (the matcher can't express "invalid", so anything not matching the two success selectors returns 401); `timestamp`/`token` proposed as dynamic; `roles`/`perfilesDetails` flagged null. **Open question:** confirm the folder URL / `method` and the 401 shape.
 
 **Phase 2 — generated route in `mock-fast.json`** (after approval):
 
 ```json
 {
-  "id": "autenticacion",
   "url": "/autenticacion-mobile-service/autenticacion",
   "method": "post",
   "responses": [
@@ -289,7 +378,7 @@ A full generated file lives in [`example/mock-fast.json`](../example/mock-fast.j
 2. Did you leave the captured `.json` **untouched**?
 3. For multi-case endpoints: exactly **one** case without `match`, and is it the **fallback** (ordered last)? Two `match`-less cases is an error.
 4. Did you pick `match` selectors from the **discriminating** request fields, fewest keys that separate the cases?
-5. Did you mark `path`/`method`/auth as `TODO` and **ask** when the JSON couldn't tell you, instead of guessing?
+5. Did you take the **URL from the folder path** (no `path` field), infer/confirm `method`, and **ask** about `auth` when unclear instead of guessing?
 6. Did you surface every **matcher limitation** that bit (negation / exists / two distinct errors) in the review summary?
 7. On modify: did you **diff** and summarize the delta before editing the spec?
 8. Did you propose `dynamic` for timestamps/tokens, and verify each dotted path exists in the response body?
