@@ -4,9 +4,13 @@
   "publishConfig": {
     "access": "public"
   },
-  "description": "Zero-config mock server with a small, scalable DSL: nested routes, auth, error injection, latency, per-user rate limiting.",
+  "description": "Zero-config HTTP mock server with a small, scalable JSON DSL — nested routes, inherited auth, error injection, variable latency, per-user rate limiting, Faker templating, hot reload, and one-command Docker deploy. A lightweight json-server / Mockoon alternative.",
   "license": "MIT",
   "type": "module",
+  "author": {
+    "name": "miguelkillki",
+    "url": "https://miguelkillki.com"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/MiguelRoot/mock-fast.git"
@@ -28,14 +32,35 @@
   "keywords": [
     "mock",
     "mock-server",
+    "mock-api",
+    "api-mocking",
+    "http-mock",
+    "fake-api",
+    "rest-api",
+    "stub",
+    "fixtures",
     "api",
     "rest",
     "testing",
+    "test-server",
+    "contract-testing",
+    "prototyping",
     "development",
+    "dev-server",
     "dsl",
     "faker",
+    "handlebars",
+    "templating",
     "rate-limit",
+    "error-injection",
+    "latency",
     "auth",
+    "cors",
+    "express",
+    "mocks-server",
+    "json-server",
+    "mockoon",
+    "docker",
     "cli"
   ],
   "scripts": {

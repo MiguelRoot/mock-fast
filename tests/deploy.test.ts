@@ -35,7 +35,7 @@ describe("deploy — generates a Docker-ready bundle", () => {
     expect(dockerfile).toContain("--host");
     expect(dockerfile).toContain("0.0.0.0");
     expect(dockerfile).toContain("--no-watch");
-    expect(dockerfile).toMatch(/npm install -g mock-fast@/);
+    expect(dockerfile).toMatch(/npm install -g .*mock-fast@\d/);
 
     // the copied DSL is the same content
     expect(readFileSync(path.join(outDir, "mock-fast.json"), "utf8")).toBe(VALID_DSL);

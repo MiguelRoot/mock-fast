@@ -16,7 +16,7 @@ mock-fast doesn't reinvent the engine: it builds on [@mocks-server/main](https:/
 ## Install
 
 ```bash
-npm install --save-dev mock-fast
+npm install --save-dev @killki/mock-fast
 ```
 
 Source: [github.com/MiguelRoot/mock-fast](https://github.com/MiguelRoot/mock-fast).
@@ -317,7 +317,7 @@ If the route has `requireAuth` and the header carries `Bearer <jwt>`, mock-fast 
 ## Programmatic usage
 
 ```ts
-import { createMockFast } from "mock-fast";
+import { createMockFast } from "@killki/mock-fast";
 
 const server = await createMockFast({
   file: "./fixtures/mock.json",

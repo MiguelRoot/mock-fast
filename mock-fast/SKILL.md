@@ -7,7 +7,7 @@ description: Use this skill whenever the user asks to build, add, modify, scaffo
 
 `mock-fast` is a zero-config HTTP mock server with a small declarative JSON DSL. It wraps [@mocks-server/main](https://www.mocks-server.org) and adds nested routes with inheritance, a pipeline of extensions, and Handlebars templating with Faker.
 
-Package: `mock-fast`. CLI: `mock-fast start`. Programmatic: `import { createMockFast } from "mock-fast"`.
+Package: `@killki/mock-fast` (CLI bin: `mock-fast`). CLI: `mock-fast start`. Programmatic: `import { createMockFast } from "@killki/mock-fast"`.
 
 ## How to run
 
@@ -311,7 +311,7 @@ This locks the username after 3 attempts that did NOT succeed. With a 200-only m
 ## Programmatic API
 
 ```ts
-import { createMockFast } from "mock-fast";
+import { createMockFast } from "@killki/mock-fast";
 
 const server = await createMockFast({
   file:       "./fixtures/mock.json",  // default: mock-fast.json | mocks.json | mock.json
