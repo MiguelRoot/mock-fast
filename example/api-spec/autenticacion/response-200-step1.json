@@ -1,0 +1,19 @@
+{
+  "code": 200,
+  "status": "success",
+  "data": {
+    "usuario": {
+      "username": "jperez",
+      "nombres": "JUAN",
+      "apellidos": "PEREZ LOPEZ",
+      "email": "jperez@congreso.gob.pe",
+      "fecRegistro": null,
+      "codEmpleado": "12345",
+      "codCostcenter": "0000002280",
+      "desCostcenter": "AREA DE INGENIERIA DE SOFTWARE",
+      "roles": null
+    },
+    "aplicaciones": null
+  },
+  "timestamp": "2026-05-28T15:26:43.046-05:00"
+}

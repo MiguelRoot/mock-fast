@@ -1,0 +1,93 @@
+{
+  "server": { "port": 3001, "host": "127.0.0.1", "cors": true },
+  "routes": [
+    {
+      "id": "autenticacion",
+      "url": "/autenticacion-mobile-service/autenticacion",
+      "method": "post",
+      "responses": [
+        {
+          "when": {
+            "body.usuario": "jperez",
+            "body.contrasena": "test1234",
+            "body.totp": null
+          },
+          "status": 200,
+          "body": {
+            "code": 200,
+            "status": "success",
+            "data": {
+              "usuario": {
+                "username": "jperez",
+                "nombres": "JUAN",
+                "apellidos": "PEREZ LOPEZ",
+                "email": "jperez@congreso.gob.pe",
+                "fecRegistro": null,
+                "codEmpleado": "12345",
+                "codCostcenter": "0000002280",
+                "desCostcenter": "AREA DE INGENIERIA DE SOFTWARE",
+                "roles": null
+              },
+              "aplicaciones": null
+            },
+            "timestamp": "{{now}}"
+          }
+        },
+        {
+          "when": {
+            "body.usuario": "jperez",
+            "body.contrasena": "test1234",
+            "body.totp": "123456"
+          },
+          "status": 200,
+          "body": {
+            "code": 200,
+            "status": "success",
+            "data": {
+              "usuario": {
+                "username": "jperez",
+                "nombres": "JUAN",
+                "apellidos": "PEREZ LOPEZ",
+                "email": "jperez@congreso.gob.pe",
+                "fecRegistro": null,
+                "codEmpleado": "12345",
+                "codCostcenter": "0000002280",
+                "desCostcenter": "AREA DE INGENIERIA DE SOFTWARE",
+                "roles": null
+              },
+              "aplicaciones": [
+                {
+                  "codigo": "VS",
+                  "token": "Bearer mock.{{uuid}}",
+                  "perfiles": ["Administrador del sistema"],
+                  "perfilesDetails": null,
+                  "acciones": [
+                    "G1_00_00_LI",
+                    "G1_01_00_LI",
+                    "G1_01_01_CR",
+                    "G1_01_02_VE",
+                    "G1_01_03_EL",
+                    "G1_02_00_LI",
+                    "G1_02_01_CR",
+                    "G1_03_00_LI",
+                    "G1_03_01_CR"
+                  ]
+                }
+              ]
+            },
+            "timestamp": "{{now}}"
+          }
+        },
+        {
+          "status": 401,
+          "body": {
+            "code": 401,
+            "status": "error",
+            "message": "Credenciales inválidas",
+            "timestamp": "{{now}}"
+          }
+        }
+      ]
+    }
+  ]
+}

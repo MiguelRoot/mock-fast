@@ -1,0 +1,36 @@
+description: Login con flujo de 2 pasos sobre la misma URL.
+
+method: POST
+path: /autenticacion-mobile-service/autenticacion
+auth: none
+
+cases:
+  step1:
+    when: body.totp es null y credenciales válidas
+    match: { "body.usuario": "jperez", "body.contrasena": "test1234", "body.totp": null }
+    request: request-step1.json
+    response: response-200-step1.json
+    status: 200
+  step2:
+    when: body.totp correcto y credenciales válidas
+    match: { "body.usuario": "jperez", "body.contrasena": "test1234", "body.totp": "123456" }
+    request: request-step2.json
+    response: response-200-step2.json
+    status: 200
+  unauthorized:
+    when: credenciales o TOTP inválidos   # sin match → fallback (por exclusión)
+    response: response-401.json
+    status: 401
+
+dynamic:
+  "timestamp": "{{now}}"
+  "data.aplicaciones.0.token": "Bearer mock.{{uuid}}"
+
+request_constraints:
+  - "`aplicaciones` debe ser el array estático `[\"VS\"]`"
+
+notes:
+  - "`usuario.fecRegistro` suele venir null"
+  - "`usuario.roles` viene null en lo observado; shape sin confirmar"
+  - "`aplicaciones[].perfilesDetails` siempre null, se ignora"
+  - "Formato del 401 tentativo, confirmar con backend"

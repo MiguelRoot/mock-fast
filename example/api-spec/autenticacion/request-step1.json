@@ -1,0 +1,6 @@
+{
+  "usuario": "jperez",
+  "contrasena": "test1234",
+  "aplicaciones": ["VS"],
+  "totp": null
+}
