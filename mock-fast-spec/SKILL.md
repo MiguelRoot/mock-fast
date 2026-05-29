@@ -5,6 +5,8 @@ description: Use this skill for the AI-managed "source of truth" layer on top of
 
 # mock-fast-spec — spec-driven, AI-managed layer for mock-fast
 
+> **Skill version:** `0.0.0-dev` — should match the installed `@killki/mock-fast`. See [Staying in sync](#staying-in-sync-with-the-installed-library).
+
 This skill is an **optional abstraction layer** over [`mock-fast`](../mock-fast/SKILL.md). The user does **not** write the `mock-fast.json` DSL. Instead they keep, per endpoint, the **raw traffic they observed on the wire** (request and response JSON) in a folder. They tell you *"I added / modified endpoint X"*, and you:
 
 1. **Infer** a small, reviewable `spec.yml` from the captured JSON (what changed, the cases, the selectors, the nullable fields).
@@ -385,3 +387,13 @@ A full generated file lives in [`example/mock-fast.json`](../example/mock-fast.j
 9. Did the generated DSL validate against the `mock-fast` rules (no `response`+`responses` together, fallback present, lowercase header matchers)?
 10. On import (Mode C): did you **flatten** inherited URL/extensions first, label the result a **draft/seed**, lift every templated field into `dynamic` with a "replace with real capture" note, and refuse to overwrite an existing `api-spec/<endpoint>/` silently?
 11. Did you run the **coverage gap analysis** in the review summary (missing 404 on `:id` routes, 400/422 on body endpoints, an explicit fallback, etc.) — as suggestions the user confirms, never auto-added?
+
+## Staying in sync with the installed library
+
+This skill is **versioned to match** `@killki/mock-fast` (see **Skill version** at the top). A skill file is a *copy* in the project, so it can fall behind the installed package after an upgrade. When you use this skill, do a quick, **soft** check:
+
+1. Read the installed version from `node_modules/@killki/mock-fast/package.json` (or `npm ls @killki/mock-fast`).
+2. Compare it to this file's **Skill version**.
+3. If the library is **newer**, tell the user the skill copy is outdated and suggest refreshing it — copy `node_modules/@killki/mock-fast/dist/mock-fast-spec/SKILL.md` over the project's `mock-fast-spec` skill file (e.g. `.claude/skills/mock-fast-spec/SKILL.md`).
+
+It's a one-time suggestion, never a blocker. If the version reads `0.0.0-dev`, this is an unbuilt source copy — ignore the check.

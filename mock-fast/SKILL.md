@@ -5,6 +5,8 @@ description: Use this skill whenever the user asks to build, add, modify, scaffo
 
 # mock-fast — DSL guide
 
+> **Skill version:** `0.0.0-dev` — should match the installed `@killki/mock-fast`. See [Staying in sync](#staying-in-sync-with-the-installed-library).
+
 `mock-fast` is a zero-config HTTP mock server with a small declarative JSON DSL. It wraps [@mocks-server/main](https://www.mocks-server.org) and adds nested routes with inheritance, a pipeline of extensions, and Handlebars templating with Faker.
 
 Package: `@killki/mock-fast` (CLI bin: `mock-fast`). CLI: `mock-fast start`. Programmatic: `import { createMockFast } from "@killki/mock-fast"`.
@@ -366,3 +368,13 @@ Returns `{ start, stop, reload, url(), adminUrl() }`.
 6. For `rateLimit`: did you choose `identifier` deliberately? Default is `req.ip` which is rarely meaningful in tests.
 7. For `on-success` rate limit: does the route have a realistic path to fail (errorRate or a route that can 4xx)?
 8. For body parsing: does the request set `Content-Type: application/json` if you templated from `body.X`?
+
+## Staying in sync with the installed library
+
+This skill is **versioned to match** `@killki/mock-fast` (see **Skill version** at the top). A skill file is a *copy* in the project, so it can fall behind the installed package after an upgrade. When you use this skill, do a quick, **soft** check:
+
+1. Read the installed version from `node_modules/@killki/mock-fast/package.json` (or `npm ls @killki/mock-fast`).
+2. Compare it to this file's **Skill version**.
+3. If the library is **newer**, tell the user the skill copy is outdated and suggest refreshing it — copy `node_modules/@killki/mock-fast/dist/mock-fast/SKILL.md` over the project's `mock-fast` skill file (e.g. `.claude/skills/mock-fast/SKILL.md`).
+
+It's a one-time suggestion, never a blocker. If the version reads `0.0.0-dev`, this is an unbuilt source copy — ignore the check.
