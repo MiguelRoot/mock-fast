@@ -4,6 +4,8 @@ Declarative mock server with a small, scalable JSON DSL. One command to start, n
 
 mock-fast doesn't reinvent the engine: it builds on [@mocks-server/main](https://www.mocks-server.org) and adds a more concise DSL, route inheritance, and an extension pipeline you grow with a single file.
 
+> 📦 **Ships with AI skills.** After installing, you'll find two Agent Skills under your install folder (`node_modules/@killki/mock-fast/dist/`) — `mock-fast` (DSL reference) and `mock-fast-spec` (spec-driven authoring) — so an assistant like Claude Code can build and maintain your mocks. [Details below](#skills-ai-assisted-authoring).
+
 ## Philosophy
 
 - **One line to start.** Sensible hard-coded defaults — port, host, CORS, hot reload, auth header. If you need something non-standard it goes in the JSON, not in flags.
@@ -16,6 +18,8 @@ mock-fast doesn't reinvent the engine: it builds on [@mocks-server/main](https:/
 ```bash
 npm install --save-dev mock-fast
 ```
+
+Source: [github.com/MiguelRoot/mock-fast](https://github.com/MiguelRoot/mock-fast).
 
 ## Hello world
 
@@ -351,6 +355,38 @@ Inherited from mocks-server, at `http://127.0.0.1:3110` by default. Useful endpo
 - `GET /api/mock/routes` — list of routes.
 - `GET /api/mock/collections` — collections.
 - Swagger UI at `/docs`.
+
+## Deploy with Docker
+
+To run the mock outside your machine, `mock-fast deploy` generates a self-contained, Docker-ready bundle from your DSL:
+
+```bash
+npx mock-fast deploy            # writes ./mock-deploy/
+```
+
+It validates the DSL first, then writes a `mock-deploy/` folder with a `Dockerfile` (pins the current mock-fast version, binds `0.0.0.0`, disables hot reload), a copy of your DSL as `mock-fast.json`, a `.dockerignore`, and a `README.md`. Then:
+
+```bash
+cd mock-deploy
+docker build -t my-mock .
+docker run --rm -p 3001:3001 my-mock
+```
+
+Options: `--out <dir>`, `--port <n>` (baked into the image), `--compose` (also emits a `docker-compose.yml`).
+
+Cautions, because it stays a **mock**:
+
+- No real security — `requireAuth` only checks the header pattern, JWTs are not verified. Don't expose real data.
+- The admin API (`3110`) also starts and can mutate routes at runtime; the Dockerfile does **not** expose it — keep it that way.
+- `rateLimit` counters are in-memory: they reset on restart and aren't shared across replicas. Run a single instance if that matters.
+- No HTTPS — put it behind a reverse proxy or your platform's TLS.
+
+## Skills (AI-assisted authoring)
+
+mock-fast ships two [Agent Skills](https://docs.claude.com/en/docs/claude-code/skills) so an AI assistant (e.g. Claude Code) can build and maintain mocks for you. They're published under `dist/` and live in the repo at [`mock-fast/SKILL.md`](mock-fast/SKILL.md) and [`mock-fast-spec/SKILL.md`](mock-fast-spec/SKILL.md):
+
+- **`mock-fast`** — the DSL reference. Teaches the assistant the full syntax (route tree, `when`, extensions, templating) so it can write `mock-fast.json` by hand.
+- **`mock-fast-spec`** — an optional "source of truth" layer. You keep raw captured traffic (request/response JSON) in an `api-spec/<endpoint>/` folder; the assistant infers a reviewable `spec.yml`, you approve it, and it generates or updates `mock-fast.json`. It works in both directions (forward, and reverse-import from an existing `mock-fast.json`), suggests missing error cases (404, 400/422, …), and keeps a strict human-in-the-loop checkpoint. See the worked example in [`example/`](example/).
 
 ## Complete example
 

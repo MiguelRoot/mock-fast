@@ -7,6 +7,14 @@
   "description": "Zero-config mock server with a small, scalable DSL: nested routes, auth, error injection, latency, per-user rate limiting.",
   "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MiguelRoot/mock-fast.git"
+  },
+  "homepage": "https://github.com/MiguelRoot/mock-fast#readme",
+  "bugs": {
+    "url": "https://github.com/MiguelRoot/mock-fast/issues"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
