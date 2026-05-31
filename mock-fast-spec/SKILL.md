@@ -135,6 +135,10 @@ api-spec/
 
 There is **no `path` field**: the route `url` is the **folder path** (one rule, like Next.js). `*auth` is required only when there's no ancestor to inherit it from; under a subtree it defaults to the inherited value.
 
+### Why YAML (not JSON), and comments are instructions
+
+Specs are **YAML on purpose**: the user writes them by hand, and YAML allows `#` comments — JSON doesn't. Fixtures stay **JSON** (captured/generated data); config-you-write stays **YAML** (each format for its role, like Kubernetes/OpenAPI). Don't "unify" them to JSON — you'd lose comments. Treat a comment in a `spec.yml`/`_group.yml` as a **directive to you**, not decoration (e.g. `# devolver 422 si falta email`, `# confirmar el shape del 401`). When syncing, **read every comment and act on it** (apply it, or raise it as an open question in the review). Comments never reach `mock-fast.json` mechanically — they only steer you. Never delete a user's comment when editing a spec unless it's resolved.
+
 ### The `case` object
 
 | Field | Type | Required | Meaning |

@@ -5,11 +5,32 @@ import { parse as parseYaml } from "yaml";
 
 import { dslDocument } from "../schema.js";
 
-/** Thrown on any deterministic-sync failure. Carries a human-readable, fixable message. */
+/** Structured, AI-friendly detail about a sync failure (also written to the error file). */
+export interface SyncErrorDetail {
+  kind:
+    | "missing-bridge" // a folder has fixtures but no spec.yml (the bridge)
+    | "invalid-yaml"
+    | "invalid-json"
+    | "schema"
+    | "fixture-missing"
+    | "dynamic-path"
+    | "bad-cases"
+    | "no-api-spec";
+  /** Folder or file the problem is about, relative-friendly. */
+  where: string;
+  /** What's missing/wrong, in plain words. */
+  problem: string;
+  /** Concrete next step the AI (or user) should take. */
+  suggestion?: string;
+}
+
+/** Thrown on any deterministic-sync failure. Carries a human-readable, fixable message + structured detail. */
 export class SyncError extends Error {
-  constructor(message: string) {
-    super(message);
+  detail: SyncErrorDetail;
+  constructor(detail: SyncErrorDetail) {
+    super(`${detail.problem} (${detail.where})${detail.suggestion ? `\n  → ${detail.suggestion}` : ""}`);
     this.name = "SyncError";
+    this.detail = detail;
   }
 }
 
@@ -56,8 +77,18 @@ function readYaml(file: string): any {
   try {
     return parseYaml(readFileSync(file, "utf8")) ?? {};
   } catch (e) {
-    throw new SyncError(`Invalid YAML in ${file}: ${(e as Error).message}`);
+    throw new SyncError({
+      kind: "invalid-yaml",
+      where: file,
+      problem: `Invalid YAML: ${(e as Error).message.split("\n")[0]}`,
+      suggestion: "Fix the YAML syntax (a colon in a value usually needs quotes).",
+    });
   }
+}
+
+/** True if a folder holds response fixtures (so it's meant to be an endpoint). */
+function hasFixtures(dir: string): boolean {
+  return readdirSync(dir).some((f) => /^response.*\.json$/i.test(f));
 }
 
 const readSpec = (dir: string) => {
@@ -102,14 +133,31 @@ function setPathIfExists(obj: any, dotted: string, value: unknown): boolean {
 
 /** Loads a case's response fixture verbatim, then applies the `dynamic` paths that exist in it. */
 function loadBody(dir: string, spec: any, c: any, applied: Set<string>): any {
-  if (!c?.response) throw new SyncError(`a case in ${path.join(dir, "spec.yml")} is missing 'response'`);
+  if (!c?.response)
+    throw new SyncError({
+      kind: "bad-cases",
+      where: path.join(dir, "spec.yml"),
+      problem: "a case is missing 'response'",
+      suggestion: "Each case needs a 'response: <file>.json' pointing to a fixture.",
+    });
   const f = path.join(dir, c.response);
-  if (!existsSync(f)) throw new SyncError(`fixture not found: ${f}`);
+  if (!existsSync(f))
+    throw new SyncError({
+      kind: "fixture-missing",
+      where: f,
+      problem: "response fixture not found",
+      suggestion: `Create ${path.basename(f)} in ${dir}, or fix the 'response' filename.`,
+    });
   let body: any;
   try {
     body = JSON.parse(readFileSync(f, "utf8"));
   } catch (e) {
-    throw new SyncError(`invalid JSON in ${f}: ${(e as Error).message}`);
+    throw new SyncError({
+      kind: "invalid-json",
+      where: f,
+      problem: `invalid JSON: ${(e as Error).message}`,
+      suggestion: "Fix the JSON syntax in this fixture.",
+    });
   }
   // dynamic is spec-level; each case has its own shape, so a path may exist in
   // only some cases. Apply where present; flag below if it matched no case at all.
@@ -121,18 +169,33 @@ function loadBody(dir: string, spec: any, c: any, applied: Set<string>): any {
 
 /** Builds `response` (single) or `responses[]` (conditional + fallback) from the cases. */
 function buildResponses(dir: string, spec: any): Record<string, unknown> {
+  const specFile = path.join(dir, "spec.yml");
   const cases = spec.cases;
   if (!cases || typeof cases !== "object")
-    throw new SyncError(`${path.join(dir, "spec.yml")} has no 'cases'`);
+    throw new SyncError({
+      kind: "bad-cases",
+      where: specFile,
+      problem: "spec has no 'cases'",
+      suggestion: "Add a 'cases:' map with at least one case (a 'response' + 'status').",
+    });
   const entries = Object.entries(cases) as [string, any][];
-  if (!entries.length) throw new SyncError(`${path.join(dir, "spec.yml")} has empty 'cases'`);
+  if (!entries.length)
+    throw new SyncError({
+      kind: "bad-cases",
+      where: specFile,
+      problem: "'cases' is empty",
+      suggestion: "Add at least one case under 'cases:'.",
+    });
 
   const withMatch = entries.filter(([, c]) => c.match);
   const fallbacks = entries.filter(([, c]) => !c.match);
   if (fallbacks.length > 1)
-    throw new SyncError(
-      `${path.join(dir, "spec.yml")} has ${fallbacks.length} fallback cases (no 'match'); only one is allowed`
-    );
+    throw new SyncError({
+      kind: "bad-cases",
+      where: specFile,
+      problem: `${fallbacks.length} fallback cases (no 'match'); only one is allowed`,
+      suggestion: "Give all but one case a 'match'; the single match-less case is the fallback (ordered last).",
+    });
 
   const applied = new Set<string>();
   let result: Record<string, unknown>;
@@ -153,7 +216,13 @@ function buildResponses(dir: string, spec: any): Record<string, unknown> {
 
   // a dynamic key that matched no case's body is almost certainly a typo
   for (const p of Object.keys(spec.dynamic ?? {})) {
-    if (!applied.has(p)) throw new SyncError(`dynamic path "${p}" not found in any case of ${path.join(dir, "spec.yml")}`);
+    if (!applied.has(p))
+      throw new SyncError({
+        kind: "dynamic-path",
+        where: specFile,
+        problem: `dynamic path "${p}" not found in any case's response body`,
+        suggestion: "Fix the dotted path to match a field in one of the fixtures.",
+      });
   }
   return result;
 }
@@ -190,7 +259,20 @@ function visitFolder(dir: string, parentUrl: string, inherited: Ctx, out: any[])
 
   const url = parentUrl + segment(name);
   const spec = readSpec(dir);
-  if (spec) out.push(endpoint(url, dir, spec, merge(here, ctxFrom(spec))));
+  if (spec) {
+    out.push(endpoint(url, dir, spec, merge(here, ctxFrom(spec))));
+  } else if (hasFixtures(dir)) {
+    // The bridge is missing: raw JSON dropped in, but no spec.yml to turn it into
+    // a route. This is the hand-off point — report exactly what the AI must create.
+    throw new SyncError({
+      kind: "missing-bridge",
+      where: dir,
+      problem: "this folder has response fixtures but no spec.yml (the bridge)",
+      suggestion:
+        "Create spec.yml here with: method, auth, and a 'cases' map pointing at the fixture(s). " +
+        "A static JSON alone can't become a route — the spec adds the request match, auth, dynamic fields and behavior.",
+    });
+  }
   visitChildren(dir, url, here, out);
 }
 
@@ -207,7 +289,13 @@ function visitChildren(dir: string, baseUrl: string, inherited: Ctx, out: any[])
  * against the DSL schema so it can never emit an invalid mock-fast.json.
  */
 export function generateDsl(apiSpecDir: string): { routes: any[] } {
-  if (!existsSync(apiSpecDir)) throw new SyncError(`api-spec dir not found: ${apiSpecDir}`);
+  if (!existsSync(apiSpecDir))
+    throw new SyncError({
+      kind: "no-api-spec",
+      where: apiSpecDir,
+      problem: "api-spec directory not found",
+      suggestion: "Create an api-spec/ folder, or pass --dir <path>.",
+    });
 
   const rootGroup = readGroup(apiSpecDir);
   const out: any[] = [];
@@ -220,7 +308,12 @@ export function generateDsl(apiSpecDir: string): { routes: any[] } {
   const res = dslDocument.safeParse(dsl);
   if (!res.success) {
     const lines = res.error.errors.map((e) => `  ${e.path.join(".") || "<root>"}: ${e.message}`);
-    throw new SyncError(`generated DSL failed validation:\n${lines.join("\n")}`);
+    throw new SyncError({
+      kind: "schema",
+      where: apiSpecDir,
+      problem: `generated DSL failed validation:\n${lines.join("\n")}`,
+      suggestion: "Fix the offending spec field so the generated mock-fast.json is valid.",
+    });
   }
   return dsl;
 }

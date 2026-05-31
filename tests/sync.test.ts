@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import path from "node:path";
 
 import { generateDsl, SyncError } from "../src/sync/generate.js";
@@ -104,8 +104,50 @@ describe("sync — deterministic generator from example/api-spec", () => {
   });
 });
 
-describe("sync — errors are descriptive (SyncError)", () => {
-  it("throws on a missing api-spec dir", () => {
-    expect(() => generateDsl(path.resolve(process.cwd(), "tests/does-not-exist"))).toThrow(SyncError);
+describe("sync — errors are descriptive (SyncError) + AI-friendly detail", () => {
+  const tmp = path.resolve(process.cwd(), "tests/.tmp-sync");
+  beforeAll(() => mkdirSync(tmp, { recursive: true }));
+  afterAll(() => rmSync(tmp, { recursive: true, force: true }));
+
+  it("missing api-spec dir → kind:no-api-spec", () => {
+    try {
+      generateDsl(path.join(tmp, "nope"));
+      expect.unreachable();
+    } catch (e) {
+      expect(e).toBeInstanceOf(SyncError);
+      expect((e as SyncError).detail.kind).toBe("no-api-spec");
+    }
+  });
+
+  it("orphan JSON (fixtures but no spec.yml) → kind:missing-bridge with a suggestion", () => {
+    const dir = path.join(tmp, "api-spec", "saludo");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path.join(dir, "response-200.json"), '{"mensaje":"hola"}');
+    try {
+      generateDsl(path.join(tmp, "api-spec"));
+      expect.unreachable();
+    } catch (e) {
+      const d = (e as SyncError).detail;
+      expect(d.kind).toBe("missing-bridge");
+      expect(d.where).toContain("saludo");
+      expect(d.suggestion).toBeTruthy();
+    }
+  });
+
+  it("once the bridge spec.yml exists, it generates the route", () => {
+    const dir = path.join(tmp, "api-spec", "saludo");
+    writeFileSync(
+      path.join(dir, "spec.yml"),
+      "method: GET\nauth: none\ncases:\n  ok:\n    response: response-200.json\n    status: 200\n"
+    );
+    const dsl = generateDsl(path.join(tmp, "api-spec"));
+    expect(dsl.routes).toEqual([
+      {
+        url: "/saludo",
+        method: "get",
+        extensions: { requireAuth: false }, // auth: none → explicit requireAuth:false
+        response: { status: 200, body: { mensaje: "hola" } },
+      },
+    ]);
   });
 });

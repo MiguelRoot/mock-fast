@@ -388,6 +388,19 @@ mock-fast ships two [Agent Skills](https://docs.claude.com/en/docs/claude-code/s
 - **`mock-fast`** — the DSL reference. Teaches the assistant the full syntax (route tree, `when`, extensions, templating) so it can write `mock-fast.json` by hand.
 - **`mock-fast-spec`** — an optional "source of truth" layer. You keep raw captured traffic (request/response JSON) in an `api-spec/<endpoint>/` folder; the assistant infers a reviewable `spec.yml`, you approve it, and it generates or updates `mock-fast.json`. It works in both directions (forward, and reverse-import from an existing `mock-fast.json`), suggests missing error cases (404, 400/422, …), and keeps a strict human-in-the-loop checkpoint. See the worked example in [`example/`](example/).
 
+## Source of truth: `api-spec/` → `mock-fast.json`
+
+If you keep an `api-spec/` tree (folders-as-URLs + `spec.yml` + captured JSON), two commands keep `mock-fast.json` in sync **deterministically** — fixtures are copied verbatim, so the mock can never drift from the data:
+
+```bash
+mock-fast sync             # generate mock-fast.json from api-spec/ once
+mock-fast watch            # run the server; press `r` to re-sync + reload (Flutter/Expo style)
+```
+
+`api-spec/` is the **hub** you edit; `mock-fast.json` is generated. Conventions mirror Next.js: the folder path is the URL, `[id]`→`:id`, `[...rest]`→catch-all, `(group)` adds no segment, `_group.yml` shares auth/behavior with a subtree, `_private/` is ignored.
+
+In `watch`, if you drop a raw `response-*.json` into a folder with no `spec.yml` ("the bridge"), pressing `r` reports exactly what's missing — to console **and** to `.mock-fast/sync-error.json` — so you can hand it to the AI to write the `spec.yml`, then press `r` again. A failed sync never crashes the server: it keeps serving the last good mock.
+
 ## Complete example
 
 ```json

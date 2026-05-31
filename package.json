@@ -70,6 +70,7 @@
     "build": "npm run clean && npm run build:ts && npm run build:skill",
     "dev": "tsx src/cli.ts start",
     "start": "node ./dist/cli.js start",
+    "watch": "node ./dist/cli.js watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepublishOnly": "npm run build",

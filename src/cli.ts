@@ -6,6 +6,7 @@ import { createMockFast } from "./index.js";
 import { LoaderError } from "./loader.js";
 import { runDeploy } from "./deploy.js";
 import { generateDsl, SyncError } from "./sync/generate.js";
+import { runWatch } from "./sync/watch.js";
 
 interface CliArgs {
   command: string;
@@ -76,6 +77,7 @@ Usage:
   mock-fast start [options]
   mock-fast deploy [options]
   mock-fast sync [options]
+  mock-fast watch [options]
 
 Options (start):
   -f, --file <path>      Path to the DSL JSON file
@@ -95,14 +97,19 @@ Options (sync — generate mock-fast.json from an api-spec/ tree):
   -d, --dir <path>       api-spec folder (default: api-spec)
   -o, --out <path>       Output DSL file (default: mock-fast.json)
 
+Options (watch — run the server and sync on demand, Flutter/Expo style):
+  -d, --dir <path>       api-spec folder (default: api-spec)
+  -o, --out <path>       Output DSL file (default: mock-fast.json)
+  -p, --port <n>         HTTP port (default: 3001)
+                         press 'r' to sync + reload, 'q' to quit
+
       --help             Show this help
 
 Examples:
   mock-fast start
-  mock-fast start --file ./fixtures/mock.json --port 4000
   mock-fast deploy --out build/mock --port 8080 --compose
-  mock-fast sync
   mock-fast sync --dir api-spec --out mock-fast.json
+  mock-fast watch
 `);
 }
 
@@ -152,6 +159,17 @@ async function main() {
 
   if (args.command === "sync") {
     sync(args);
+    return;
+  }
+
+  if (args.command === "watch") {
+    await runWatch({
+      dir: args.dir,
+      out: args.out,
+      port: args.port,
+      host: args.host,
+      adminPort: args.adminPort,
+    });
     return;
   }
 
