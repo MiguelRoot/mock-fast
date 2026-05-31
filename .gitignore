@@ -4,6 +4,7 @@ dist/
 .mocks/
 .mock-fast/
 tests/.tmp-sync/
+tests/.tmp-reverse/
 .DS_Store
 coverage/
 .claude

@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { readFileSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { readFileSync, mkdirSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import path from "node:path";
 
 import { generateDsl, SyncError } from "../src/sync/generate.js";
+import { reverseToApiSpec } from "../src/sync/reverse.js";
 import { createMockFast, type MockFastInstance } from "../src/index.js";
 
 const SPEC = path.resolve(process.cwd(), "example/api-spec");
@@ -149,5 +150,48 @@ describe("sync — errors are descriptive (SyncError) + AI-friendly detail", () 
         response: { status: 200, body: { mensaje: "hola" } },
       },
     ]);
+  });
+});
+
+describe("sync --from-mock — reverse mock-fast.json → api-spec/ (round-trip)", () => {
+  const tmp = path.resolve(process.cwd(), "tests/.tmp-reverse");
+  const dslFile = path.join(tmp, "mock.json");
+  const apiSpec = path.join(tmp, "api-spec");
+
+  beforeAll(async () => {
+    rmSync(tmp, { recursive: true, force: true });
+    mkdirSync(tmp, { recursive: true });
+    writeFileSync(dslFile, JSON.stringify(generateDsl(SPEC), null, 2));
+    await reverseToApiSpec(dslFile, apiSpec);
+  });
+  afterAll(() => rmSync(tmp, { recursive: true, force: true }));
+
+  it("recreates folders + spec.yml + response JSON (with [id]/[...rest] conventions)", () => {
+    expect(existsSync(path.join(apiSpec, "api/protegida/perfil/spec.yml"))).toBe(true);
+    expect(existsSync(path.join(apiSpec, "api/protegida/perfil/response-200.json"))).toBe(true);
+    expect(existsSync(path.join(apiSpec, "api/protegida/usuarios/[id]/spec.yml"))).toBe(true);
+    expect(existsSync(path.join(apiSpec, "api/protegida/archivos/[...rest]/spec.yml"))).toBe(true);
+  });
+
+  it("fixtures contain NO Handlebars (materialized); spec lifts them into dynamic", () => {
+    const body = readFileSync(path.join(apiSpec, "api/protegida/perfil/response-200.json"), "utf8");
+    expect(body).not.toContain("{{");
+    const spec = readFileSync(path.join(apiSpec, "api/protegida/perfil/spec.yml"), "utf8");
+    expect(spec).toContain("dynamic:");
+    expect(spec).toContain("{{uuid}}");
+  });
+
+  it("round-trip is stable: reverse then forward yields the same route set", () => {
+    const original = generateDsl(SPEC);
+    const roundtrip = generateDsl(apiSpec);
+    const norm = (d: { routes: any[] }) =>
+      JSON.stringify(d.routes.map((r) => `${r.method ?? "get"} ${r.url}`).sort());
+    expect(roundtrip.routes.length).toBe(original.routes.length);
+    expect(norm(roundtrip)).toBe(norm(original));
+  });
+
+  it("refuses to overwrite existing api-spec without --force, succeeds with it", async () => {
+    await expect(reverseToApiSpec(dslFile, apiSpec)).rejects.toBeInstanceOf(SyncError);
+    await expect(reverseToApiSpec(dslFile, apiSpec, { force: true })).resolves.toBeTruthy();
   });
 });

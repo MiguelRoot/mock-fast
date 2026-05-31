@@ -7,6 +7,7 @@ import { LoaderError } from "./loader.js";
 import { runDeploy } from "./deploy.js";
 import { generateDsl, SyncError } from "./sync/generate.js";
 import { runWatch } from "./sync/watch.js";
+import { reverseToApiSpec } from "./sync/reverse.js";
 
 interface CliArgs {
   command: string;
@@ -18,6 +19,8 @@ interface CliArgs {
   out?: string;
   compose?: boolean;
   dir?: string;
+  fromMock?: boolean;
+  force?: boolean;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -58,6 +61,12 @@ function parseArgs(argv: string[]): CliArgs {
       case "--compose":
         args.compose = true;
         break;
+      case "--from-mock":
+        args.fromMock = true;
+        break;
+      case "--force":
+        args.force = true;
+        break;
       case "--help":
         printHelp();
         process.exit(0);
@@ -96,6 +105,9 @@ Options (deploy — generate a Docker-ready bundle):
 Options (sync — generate mock-fast.json from an api-spec/ tree):
   -d, --dir <path>       api-spec folder (default: api-spec)
   -o, --out <path>       Output DSL file (default: mock-fast.json)
+      --from-mock        Reverse: regenerate the api-spec/ tree FROM a mock-fast.json
+  -f, --file <path>      (with --from-mock) source DSL (default: mock-fast.json)
+      --force            (with --from-mock) overwrite an existing api-spec/
 
 Options (watch — run the server and sync on demand, Flutter/Expo style):
   -d, --dir <path>       api-spec folder (default: api-spec)
@@ -133,8 +145,27 @@ async function deploy(args: CliArgs) {
   }
 }
 
-function sync(args: CliArgs) {
+async function sync(args: CliArgs) {
   const dir = path.resolve(process.cwd(), args.dir ?? "api-spec");
+
+  if (args.fromMock) {
+    // reverse: mock-fast.json → api-spec/ tree (seed)
+    const dslFile = path.resolve(process.cwd(), args.file ?? "mock-fast.json");
+    try {
+      const r = await reverseToApiSpec(dslFile, dir, { force: args.force });
+      console.log(`[mock-fast] sync --from-mock: ${dir} (${r.folders} folder(s), ${r.files.length} file(s)) from ${dslFile}`);
+      console.log(`  Note: this is a SEED — fixtures are samples for templated fields; replace with real captures.`);
+      for (const n of r.notes) console.log(`  • ${n}`);
+    } catch (err) {
+      if (err instanceof SyncError) {
+        console.error(`[mock-fast] sync --from-mock failed:\n${err.message}`);
+        process.exit(1);
+      }
+      throw err;
+    }
+    return;
+  }
+
   const out = path.resolve(process.cwd(), args.out ?? "mock-fast.json");
   try {
     const dsl = generateDsl(dir);
@@ -158,7 +189,7 @@ async function main() {
   }
 
   if (args.command === "sync") {
-    sync(args);
+    await sync(args);
     return;
   }
 

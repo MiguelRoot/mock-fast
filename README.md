@@ -395,9 +395,12 @@ If you keep an `api-spec/` tree (folders-as-URLs + `spec.yml` + captured JSON), 
 ```bash
 mock-fast sync             # generate mock-fast.json from api-spec/ once
 mock-fast watch            # run the server; press `r` to re-sync + reload (Flutter/Expo style)
+mock-fast sync --from-mock # reverse: regenerate the whole api-spec/ tree FROM mock-fast.json
 ```
 
 `api-spec/` is the **hub** you edit; `mock-fast.json` is generated. Conventions mirror Next.js: the folder path is the URL, `[id]`→`:id`, `[...rest]`→catch-all, `(group)` adds no segment, `_group.yml` shares auth/behavior with a subtree, `_private/` is ignored.
+
+**Bootstrapping from an existing mock** — already have a `mock-fast.json` and want the source-of-truth layer? `mock-fast sync --from-mock` recreates the entire `api-spec/` tree from it (folders + `spec.yml` + `response-*.json`). Templated values (`{{uuid}}`, `{{faker …}}`) become concrete samples in the fixtures and are lifted into `dynamic` — so it's a **seed** to refine with real captures, not observed truth. It won't overwrite an existing `api-spec/` without `--force`. The round-trip is stable: reverse then `sync` yields the same routes.
 
 In `watch`, if you drop a raw `response-*.json` into a folder with no `spec.yml` ("the bridge"), pressing `r` reports exactly what's missing — to console **and** to `.mock-fast/sync-error.json` — so you can hand it to the AI to write the `spec.yml`, then press `r` again. A failed sync never crashes the server: it keeps serving the last good mock.
 
