@@ -1,6 +1,5 @@
-description: Perfil del usuario autenticado. HEREDA auth: bearer (y behavior) de protegida.
+description: Perfil del usuario autenticado. Hereda el auth bearer (y behavior) de protegida.
 method: GET
-# auth: (heredado bearer)  ·  path por defecto → /perfil  ·  efectivo: /api/protegida/perfil
 cases:
   ok:
     response: response-200.json
