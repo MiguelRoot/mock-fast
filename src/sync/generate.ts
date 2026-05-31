@@ -86,21 +86,22 @@ function segment(name: string): string {
   return "/" + name;
 }
 
-/** Walks the response body and writes `value` at the dotted path (numeric segments index arrays). */
-function setPath(obj: any, dotted: string, value: unknown, where: string) {
+/** Writes `value` at the dotted path if it exists (numeric segments index arrays). Returns true if set. */
+function setPathIfExists(obj: any, dotted: string, value: unknown): boolean {
   const keys = dotted.split(".");
   let cur = obj;
   for (let i = 0; i < keys.length - 1; i++) {
-    if (cur == null || !(keys[i]! in cur))
-      throw new SyncError(`dynamic path "${dotted}" not found in ${where}`);
+    if (cur == null || typeof cur !== "object" || !(keys[i]! in cur)) return false;
     cur = cur[keys[i]!];
   }
-  if (cur == null) throw new SyncError(`dynamic path "${dotted}" not found in ${where}`);
-  cur[keys[keys.length - 1]!] = value;
+  const last = keys[keys.length - 1]!;
+  if (cur == null || typeof cur !== "object" || !(last in cur)) return false;
+  cur[last] = value;
+  return true;
 }
 
-/** Loads a case's response fixture verbatim, then applies `dynamic` substitutions. */
-function loadBody(dir: string, spec: any, c: any): any {
+/** Loads a case's response fixture verbatim, then applies the `dynamic` paths that exist in it. */
+function loadBody(dir: string, spec: any, c: any, applied: Set<string>): any {
   if (!c?.response) throw new SyncError(`a case in ${path.join(dir, "spec.yml")} is missing 'response'`);
   const f = path.join(dir, c.response);
   if (!existsSync(f)) throw new SyncError(`fixture not found: ${f}`);
@@ -110,7 +111,11 @@ function loadBody(dir: string, spec: any, c: any): any {
   } catch (e) {
     throw new SyncError(`invalid JSON in ${f}: ${(e as Error).message}`);
   }
-  for (const [p, expr] of Object.entries(spec.dynamic ?? {})) setPath(body, p, expr, path.basename(f));
+  // dynamic is spec-level; each case has its own shape, so a path may exist in
+  // only some cases. Apply where present; flag below if it matched no case at all.
+  for (const [p, expr] of Object.entries(spec.dynamic ?? {})) {
+    if (setPathIfExists(body, p, expr)) applied.add(p);
+  }
   return body;
 }
 
@@ -129,19 +134,28 @@ function buildResponses(dir: string, spec: any): Record<string, unknown> {
       `${path.join(dir, "spec.yml")} has ${fallbacks.length} fallback cases (no 'match'); only one is allowed`
     );
 
+  const applied = new Set<string>();
+  let result: Record<string, unknown>;
+
   if (entries.length === 1 && fallbacks.length === 1) {
     const c = fallbacks[0]![1];
-    return { response: { status: c.status ?? 200, body: loadBody(dir, spec, c) } };
+    result = { response: { status: c.status ?? 200, body: loadBody(dir, spec, c, applied) } };
+  } else {
+    const responses = [...withMatch, ...fallbacks].map(([, c]) => {
+      const r: Record<string, unknown> = {};
+      if (c.match) r.when = c.match;
+      r.status = c.status ?? 200;
+      r.body = loadBody(dir, spec, c, applied);
+      return r;
+    });
+    result = { responses };
   }
 
-  const responses = [...withMatch, ...fallbacks].map(([, c]) => {
-    const r: Record<string, unknown> = {};
-    if (c.match) r.when = c.match;
-    r.status = c.status ?? 200;
-    r.body = loadBody(dir, spec, c);
-    return r;
-  });
-  return { responses };
+  // a dynamic key that matched no case's body is almost certainly a typo
+  for (const p of Object.keys(spec.dynamic ?? {})) {
+    if (!applied.has(p)) throw new SyncError(`dynamic path "${p}" not found in any case of ${path.join(dir, "spec.yml")}`);
+  }
+  return result;
 }
 
 function endpoint(url: string, dir: string, spec: any, eff: Ctx): any {
