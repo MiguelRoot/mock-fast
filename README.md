@@ -21,6 +21,8 @@ npm install --save-dev @killki/mock-fast
 
 Source: [github.com/MiguelRoot/mock-fast](https://github.com/MiguelRoot/mock-fast).
 
+> **Running the CLI.** `mock-fast` is a local command, not a global one — so run it with **`npx mock-fast …`** (npx finds it inside your project's `node_modules`). Plain `mock-fast …` will fail with *"'mock-fast' is not recognized…"*. Alternatively, add it to your `package.json` scripts (e.g. `"mock": "mock-fast watch"`) and run `npm run mock`; inside npm scripts the bare name works. All examples below use `npx`.
+
 ## Hello world
 
 Create a `mock-fast.json` file at the project root:
@@ -76,7 +78,7 @@ To change any of these, put it in the JSON:
 CLI flags are only for one-off overrides:
 
 ```bash
-mock-fast start --file ./fixtures/mock.json --port 4000 --no-watch
+npx mock-fast start --file ./fixtures/mock.json --port 4000 --no-watch
 ```
 
 ## DSL
@@ -390,29 +392,67 @@ mock-fast ships two [Agent Skills](https://docs.claude.com/en/docs/claude-code/s
 
 ## The `api-spec/` view 🧪 (experimental)
 
-> **Experimental.** An agentic workflow to manage your mocks more easily: instead of reading the nested `mock-fast.json`, you work with one plain JSON per request/response (easy to scan, easy to spot a missing field) plus a small `spec.yml` per endpoint that holds the logic (method, auth, which response for which request, which fields are dynamic). An AI assistant does the heavy lifting; the CLI does the deterministic transforms.
+> **Experimental.** A friendlier way to manage a mock with an AI assistant. The nested `mock-fast.json` is hard to scan, so this mode projects it into one plain JSON per request/response (easy to read, easy to spot a missing field) plus a tiny `spec.yml` per endpoint that holds the logic (method, auth, which response for which request). You edit the readable files; the assistant applies your edits back to the mock.
 
-Two ways to relate the `api-spec/` and the mock:
+### What you need first
 
-```bash
-mock-fast sync             # forward: generate mock-fast.json from an api-spec/ tree
-mock-fast sync --from-mock # reverse: regenerate the whole api-spec/ view FROM mock-fast.json
-mock-fast watch            # interactive (see below)
+A **`mock-fast.json`** in your folder — it's the source of truth. Don't have one yet? Create this minimal file and you're set:
+
+```json
+{ "routes": [ { "url": "/health", "method": "get", "response": { "status": 200, "body": { "ok": true } } } ] }
 ```
 
-**Conventions mirror Next.js:** the folder path is the URL, `[id]`→`:id`, `[...rest]`→catch-all, `[[...rest]]`→optional catch-all, `(group)` adds no URL segment, `_group.yml` shares `auth`/`behavior` with a subtree, `_private/` is ignored. The `spec.yml` is pure logic (no comments/prose); files are named by status: `response-<status>.json` (+`-v2`), `request.json` (+`-v2`).
+### Quick start — `mock-fast watch`
 
-### `watch` — mock is the source, api-spec is the readable view
+From the folder that contains your `mock-fast.json`:
 
-In `watch`, the **`mock-fast.json` is the source of truth** and `api-spec/` is a readable projection you can edit:
+```bash
+npx mock-fast watch
+```
 
-- **`r`** (and on start): refresh the view from the mock (`mock-fast.json` → `api-spec/`) and reset the change log.
-- **`m`**: map what you edited in the view since the last `r` into `.mock-fast/changes.json` — `{file, line, before, after}` per changed line.
-- Then tell the assistant *"actualizá el último cambio en el mock"*: it reads `changes.json`, applies just those edits to `mock-fast.json` (no full-file scan, no token waste), and you press `r`.
+What happens, in order:
 
-The server runs on `mock-fast.json` and hot-reloads when it's rewritten; a failed transform never crashes it.
+1. It generates a readable **`api-spec/`** folder from your `mock-fast.json` (one folder per route, with plain `response-*.json` files).
+2. It starts the mock server (prints the URL, e.g. `http://127.0.0.1:3001`). *If 3001 is busy it just uses the next free port and tells you — you don't have to do anything.*
+3. It waits for a keypress:
 
-> Reverse/`--from-mock` produces a **seed**: templated values (`{{uuid}}`, `{{faker …}}`) become concrete samples in the fixtures and are lifted into `dynamic`. It won't overwrite an existing `api-spec/` without `--force`. The route round-trip is stable (reverse → forward yields the same routes). Full behavior lives in the [`mock-fast-spec`](mock-fast-spec/SKILL.md) skill; see the worked tree in [`example/`](example/).
+| Key | What it does |
+|---|---|
+| `r` | Re-generate the `api-spec/` view from the mock, and clear the change log. Your reset point. |
+| `m` | Save what you edited in `api-spec/` since the last `r` into `.mock-fast/changes.json` (which file + line). |
+| `q` | Quit. |
+
+### The everyday loop
+
+```
+1. npx mock-fast watch        → starts; you see the api-spec/ view
+2. edit a file in api-spec/   → e.g. add a field to a response
+3. press  m                   → records exactly what changed
+4. tell the assistant:        → "actualizá el último cambio en el mock"
+                                 it reads .mock-fast/changes.json, applies just that
+                                 to mock-fast.json (no scanning every file)
+5. press  r                   → refreshes the view; you're in sync
+```
+
+The server runs on `mock-fast.json` and reloads automatically when it changes. A failed step never crashes it — it keeps serving the last good mock.
+
+### One-shot conversions (no watch)
+
+```bash
+npx mock-fast sync             # forward: build mock-fast.json FROM an api-spec/ tree
+npx mock-fast sync --from-mock # reverse: rebuild the whole api-spec/ view FROM mock-fast.json
+```
+
+`--from-mock` won't overwrite an existing `api-spec/` unless you add `--force`. It's a **seed**: dynamic values like `{{uuid}}`/`{{now}}` become sample data in the files and are recorded under `dynamic` — replace them with real captures when you have them.
+
+### Folder & file conventions (like Next.js)
+
+- The **folder path is the URL**: `usuarios/` → `/usuarios`, `[id]/` → `/:id`, `[...rest]/` → catch-all, `(group)/` adds no URL segment, `_private/` is ignored.
+- `_group.yml` in a folder shares `auth`/`behavior` with everything under it (e.g. one auth guard for a whole subtree).
+- Files are named by status: `response-200.json`, `response-404.json`, a second of the same status is `-v2`; requests are `request.json`, `request-v2.json`.
+- A `spec.yml` is **pure logic** — no comments or prose.
+
+Full details live in the [`mock-fast-spec`](mock-fast-spec/SKILL.md) skill; there's a worked tree in [`example/`](example/).
 
 ## Complete example
 

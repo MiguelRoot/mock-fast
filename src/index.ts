@@ -40,6 +40,28 @@ async function getFreePort(): Promise<number> {
   });
 }
 
+/** True if `port` on `host` can be bound right now (i.e. it's free). */
+export function isPortFree(port: number, host = "0.0.0.0"): Promise<boolean> {
+  return new Promise((resolve) => {
+    const srv = net.createServer();
+    srv.unref();
+    srv.once("error", () => resolve(false));
+    srv.listen(port, host, () => srv.close(() => resolve(true)));
+  });
+}
+
+/**
+ * Returns the first free port at or after `start` (tries start, start+1, …),
+ * skipping any in `avoid`. Falls back to an OS-assigned port after `tries`.
+ */
+export async function findFreePortFrom(start: number, avoid: number[] = [], tries = 50): Promise<number> {
+  for (let p = start; p < start + tries; p++) {
+    if (avoid.includes(p)) continue;
+    if (await isPortFree(p)) return p;
+  }
+  return getFreePort();
+}
+
 export interface CreateMockFastOptions {
   file?: string;
   dsl?: unknown;

@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 
-import { createMockFast, type MockFastInstance } from "../index.js";
+import { createMockFast, findFreePortFrom, type MockFastInstance } from "../index.js";
 import { SyncError } from "./generate.js";
 import { reverseToApiSpec } from "./reverse.js";
 
@@ -149,17 +149,25 @@ export async function runWatch(opts: WatchOptions = {}): Promise<void> {
   }
   await reverse();
 
+  // Pick free ports so a leftover instance (or anything on 3001/3110) never blocks us.
+  const wantPort = opts.port ?? 3001;
+  const wantAdmin = opts.adminPort ?? 3110;
+  const port = await findFreePortFrom(wantPort);
+  const adminPort = await findFreePortFrom(wantAdmin, [port]);
+  if (port !== wantPort)
+    console.log(`\x1b[33m•\x1b[0m port ${wantPort} was busy — using ${port} instead.`);
+
   const server: MockFastInstance = await createMockFast({
     file: mockFile,
-    port: opts.port,
+    port,
     host: opts.host,
-    adminPort: opts.adminPort,
+    adminPort,
     watch: true, // server hot-reloads when the AI rewrites the mock
     silent: true,
   });
   await server.start();
   console.log(`\x1b[36mmock-fast\x1b[0m source: ${path.basename(mockFile)} → serving ${server.url()}`);
-  console.log(`  view: ${path.relative(cwd, specDir) || "."}`);
+  console.log(`  view: ${path.relative(cwd, specDir) || "."}   admin: ${adminPort}`);
 
   let watcher: FSWatcher | null = null;
   try {
