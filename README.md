@@ -386,23 +386,33 @@ Cautions, because it stays a **mock**:
 mock-fast ships two [Agent Skills](https://docs.claude.com/en/docs/claude-code/skills) so an AI assistant (e.g. Claude Code) can build and maintain mocks for you. They're published under `dist/` and live in the repo at [`mock-fast/SKILL.md`](mock-fast/SKILL.md) and [`mock-fast-spec/SKILL.md`](mock-fast-spec/SKILL.md):
 
 - **`mock-fast`** — the DSL reference. Teaches the assistant the full syntax (route tree, `when`, extensions, templating) so it can write `mock-fast.json` by hand.
-- **`mock-fast-spec`** — an optional "source of truth" layer. You keep raw captured traffic (request/response JSON) in an `api-spec/<endpoint>/` folder; the assistant infers a reviewable `spec.yml`, you approve it, and it generates or updates `mock-fast.json`. It works in both directions (forward, and reverse-import from an existing `mock-fast.json`), suggests missing error cases (404, 400/422, …), and keeps a strict human-in-the-loop checkpoint. See the worked example in [`example/`](example/).
+- **`mock-fast-spec`** 🧪 (experimental) — the agentic `api-spec/` workflow. You keep one plain JSON per request/response plus a small `spec.yml` per endpoint (the logic); the assistant writes/fixes the `spec.yml` and edits JSON, while the CLI (`sync` / `watch` / `sync --from-mock`) does the deterministic transforms. See [the section below](#the-api-spec-view--experimental).
 
-## Source of truth: `api-spec/` → `mock-fast.json`
+## The `api-spec/` view 🧪 (experimental)
 
-If you keep an `api-spec/` tree (folders-as-URLs + `spec.yml` + captured JSON), two commands keep `mock-fast.json` in sync **deterministically** — fixtures are copied verbatim, so the mock can never drift from the data:
+> **Experimental.** An agentic workflow to manage your mocks more easily: instead of reading the nested `mock-fast.json`, you work with one plain JSON per request/response (easy to scan, easy to spot a missing field) plus a small `spec.yml` per endpoint that holds the logic (method, auth, which response for which request, which fields are dynamic). An AI assistant does the heavy lifting; the CLI does the deterministic transforms.
+
+Two ways to relate the `api-spec/` and the mock:
 
 ```bash
-mock-fast sync             # generate mock-fast.json from api-spec/ once
-mock-fast watch            # run the server; press `r` to re-sync + reload (Flutter/Expo style)
-mock-fast sync --from-mock # reverse: regenerate the whole api-spec/ tree FROM mock-fast.json
+mock-fast sync             # forward: generate mock-fast.json from an api-spec/ tree
+mock-fast sync --from-mock # reverse: regenerate the whole api-spec/ view FROM mock-fast.json
+mock-fast watch            # interactive (see below)
 ```
 
-`api-spec/` is the **hub** you edit; `mock-fast.json` is generated. Conventions mirror Next.js: the folder path is the URL, `[id]`→`:id`, `[...rest]`→catch-all, `(group)` adds no segment, `_group.yml` shares auth/behavior with a subtree, `_private/` is ignored.
+**Conventions mirror Next.js:** the folder path is the URL, `[id]`→`:id`, `[...rest]`→catch-all, `[[...rest]]`→optional catch-all, `(group)` adds no URL segment, `_group.yml` shares `auth`/`behavior` with a subtree, `_private/` is ignored. The `spec.yml` is pure logic (no comments/prose); files are named by status: `response-<status>.json` (+`-v2`), `request.json` (+`-v2`).
 
-**Bootstrapping from an existing mock** — already have a `mock-fast.json` and want the source-of-truth layer? `mock-fast sync --from-mock` recreates the entire `api-spec/` tree from it (folders + `spec.yml` + `response-*.json`). Templated values (`{{uuid}}`, `{{faker …}}`) become concrete samples in the fixtures and are lifted into `dynamic` — so it's a **seed** to refine with real captures, not observed truth. It won't overwrite an existing `api-spec/` without `--force`. The round-trip is stable: reverse then `sync` yields the same routes.
+### `watch` — mock is the source, api-spec is the readable view
 
-In `watch`, if you drop a raw `response-*.json` into a folder with no `spec.yml` ("the bridge"), pressing `r` reports exactly what's missing — to console **and** to `.mock-fast/sync-error.json` — so you can hand it to the AI to write the `spec.yml`, then press `r` again. A failed sync never crashes the server: it keeps serving the last good mock.
+In `watch`, the **`mock-fast.json` is the source of truth** and `api-spec/` is a readable projection you can edit:
+
+- **`r`** (and on start): refresh the view from the mock (`mock-fast.json` → `api-spec/`) and reset the change log.
+- **`m`**: map what you edited in the view since the last `r` into `.mock-fast/changes.json` — `{file, line, before, after}` per changed line.
+- Then tell the assistant *"actualizá el último cambio en el mock"*: it reads `changes.json`, applies just those edits to `mock-fast.json` (no full-file scan, no token waste), and you press `r`.
+
+The server runs on `mock-fast.json` and hot-reloads when it's rewritten; a failed transform never crashes it.
+
+> Reverse/`--from-mock` produces a **seed**: templated values (`{{uuid}}`, `{{faker …}}`) become concrete samples in the fixtures and are lifted into `dynamic`. It won't overwrite an existing `api-spec/` without `--force`. The route round-trip is stable (reverse → forward yields the same routes). Full behavior lives in the [`mock-fast-spec`](mock-fast-spec/SKILL.md) skill; see the worked tree in [`example/`](example/).
 
 ## Complete example
 

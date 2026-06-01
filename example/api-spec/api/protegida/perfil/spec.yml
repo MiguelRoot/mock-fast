@@ -1,6 +1,6 @@
 method: GET
 cases:
-  ok:
+  s200:
     response: response-200.json
     status: 200
 dynamic:

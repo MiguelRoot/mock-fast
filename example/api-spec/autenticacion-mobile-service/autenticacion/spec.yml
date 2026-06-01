@@ -7,17 +7,17 @@ behavior:
     max: 3
     on_limit: { status: 423, body: { error: "Cuenta temporalmente bloqueada" } }
 cases:
-  step1:
+  s200:
     match: { "body.usuario": "jperez", "body.contrasena": "test1234", "body.totp": null }
-    request: request-step1.json
-    response: response-200-step1.json
+    request: request.json
+    response: response-200.json
     status: 200
-  step2:
+  s200_v2:
     match: { "body.usuario": "jperez", "body.contrasena": "test1234", "body.totp": "123456" }
-    request: request-step2.json
-    response: response-200-step2.json
+    request: request-v2.json
+    response: response-200-v2.json
     status: 200
-  unauthorized:
+  s401:
     response: response-401.json
     status: 401
 dynamic:

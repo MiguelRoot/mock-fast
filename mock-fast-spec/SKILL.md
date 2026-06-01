@@ -18,21 +18,30 @@ The two together are the bridge that builds the mock server.
 
 The api-spec ↔ mock-fast.json conversion is **deterministic code**, not your job:
 
-| Command | Direction |
+| Command | What it does |
 |---|---|
-| `mock-fast sync` | `api-spec/` → `mock-fast.json` |
-| `mock-fast watch` | runs the server; press `r` to re-sync + reload (Flutter/Expo style) |
-| `mock-fast sync --from-mock` | reverse: regenerate the whole `api-spec/` tree FROM `mock-fast.json` (`--force` to overwrite) |
+| `mock-fast sync` | forward: `api-spec/` → `mock-fast.json` (when the api-spec is the source) |
+| `mock-fast sync --from-mock` | reverse: regenerate the whole `api-spec/` view FROM `mock-fast.json` (`--force`) |
+| `mock-fast watch` | **mock-fast.json is the source of truth; api-spec/ is a readable view.** See below. |
 
-So **never hand-write `mock-fast.json` from a spec, and never hand-derive a spec by mentally flattening the mock** — run the command. The generator copies fixtures verbatim and resolves inheritance, so it can't drift. If it fails it prints a structured error (also to `.mock-fast/sync-error.json`) with `kind`, `where`, `problem`, `suggestion`.
+The transformation is **deterministic code** — never hand-write `mock-fast.json` from a spec, and never hand-derive a spec by mentally flattening the mock. Run the command.
 
-## Your actual job
+## The `watch` model: mock is the source, api-spec is the view
 
-1. **Fix `missing-bridge`.** When the user pastes a `sync-error.json` (or says the watcher reports a folder has `response-*.json` but no `spec.yml`): that folder is an endpoint. Read its JSON and write the `spec.yml`. The URL is the folder path — don't ask about it. `method` isn't in the body: infer it (a `request-*.json` present ⇒ POST/PUT/PATCH, else GET) or **ask**. Ask about `auth` only if unclear.
-2. **Edit on request.** "revisá los responses de `<x>`", "renombrá `contrasena`→`password`", "agregá un campo": edit the relevant `.json` / `spec.yml` following the existing pattern. One change at a time. Then tell the user to run `sync`/`r`.
-3. **Bootstrap.** "generá el api-spec desde mi mock" → that's `mock-fast sync --from-mock`; run it (warn it overwrites with `--force`, and that templated values become samples).
+In `watch`, the **`mock-fast.json` is the source of truth**. The `api-spec/` is a readable projection of it so the user can see request/response clearly and edit there. Keys:
 
-You write **spec.yml and JSON**. You do not write `mock-fast.json`.
+- **`r`** (and on startup): reverse the view from the mock (`mock-fast.json` → `api-spec/`), snapshot it, and **reset** the change log.
+- **`m`**: diff the current `api-spec/` against that snapshot and write **`.mock-fast/changes.json`** — `{file, line, kind, before, after}` per edited line, **only changes since the last `r`**.
+- The server runs on `mock-fast.json` and hot-reloads when it's rewritten.
+
+### Your job in this model
+
+1. **"actualizá el último cambio en el mock"** (the main one): read **`.mock-fast/changes.json`**. It points you to the exact file + line(s) the user edited. Apply **just those edits** to `mock-fast.json` surgically — find the corresponding field in the mock and change it. **Do not** regenerate the whole mock from the api-spec (the view is lossy — a forward `sync` would damage it). After you apply, tell the user to press `r` (refreshes the view and clears the log). Touch only what `changes.json` lists.
+2. **Fix `missing-bridge`.** If the user pastes a `.mock-fast/sync-error.json` (a folder has `response-*.json` but no `spec.yml`): that folder is an endpoint; write its `spec.yml` (URL = folder path; infer `method` or ask; ask about `auth` only if unclear).
+3. **Edit on request.** "revisá los responses de `<x>`", "renombrá `contrasena`→`password`": edit the relevant `.json`/`spec.yml`. One change at a time.
+4. **Bootstrap.** "generá el api-spec desde mi mock" → `mock-fast sync --from-mock --force`.
+
+You apply changes to `mock-fast.json` **only** when guided by `changes.json` (surgical) — otherwise you edit the api-spec view and the user drives the CLI.
 
 ## `spec.yml` is pure logic — no human language
 
@@ -43,21 +52,28 @@ A `spec.yml` contains **only** the fields the generator reads. **No comments, no
 | `method` | `GET\|POST\|PUT\|PATCH\|DELETE` | yes | route method |
 | `auth` | `none\|bearer` | no | `bearer`→`requireAuth:true`. Omit to inherit from an ancestor `_group.yml`; set to override. |
 | `headers` | `map<string,string>` | no | route headers |
-| `cases` | `map<variant, case>` | yes | one response, or conditional `responses[]` |
+| `cases` | `map<key, case>` | yes | one response, or conditional `responses[]` |
 | `behavior` | `map` | no | extensions (below) |
 | `dynamic` | `map<dotpath, handlebars>` | no | fields of the response body to templatize |
 
 **`case` object:** `match` (map of dotted request paths → primitive; absent ⇒ this is the fallback), `request` (optional example file), `response` (file, required), `status` (int, required).
 
+**Naming — status, not prose.** The status code already identifies the response, so don't add words:
+- **Response file:** `response-<status>.json`. A second response of the same status is `-v2`, `-v3` (`response-200.json`, `response-200-v2.json`).
+- **Request file:** `request.json` (a request has no status). A second is `request-v2.json`, `request-v3.json`.
+- **Case key:** `s<status>` (+ `_v2`, `_v3`). The `s` prefix is because YAML keys can't start with a digit.
+
+Filenames are just labels — the `case` links its own `request:`/`response:` explicitly, so a case's request and response don't have to share a suffix. (`sync --from-mock` only emits response files; requests aren't in the mock, so you/the user create those.)
+
 ```yaml
 method: POST
 auth: none
 cases:
-  exito:
+  s200:
     match: { "body.usuario": "jperez", "body.password": "test1234" }
     response: response-200.json
     status: 200
-  fallo:                 # no match ⇒ fallback, must be last
+  s401:                  # no match ⇒ fallback, must be last
     response: response-401.json
     status: 401
 ```

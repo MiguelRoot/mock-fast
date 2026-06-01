@@ -68,7 +68,7 @@ describe("sync — deterministic generator from example/api-spec", () => {
       const s1 = await post(A, { usuario: "jperez", contrasena: "test1234", aplicaciones: ["VS"], totp: null });
       expect(s1.status).toBe(200);
       expect(strip(s1.body, ["timestamp"])).toBe(
-        strip(fixture("autenticacion-mobile-service/autenticacion/response-200-step1.json"), ["timestamp"])
+        strip(fixture("autenticacion-mobile-service/autenticacion/response-200.json"), ["timestamp"])
       );
       const s2 = await post(A, { usuario: "jperez", contrasena: "test1234", aplicaciones: ["VS"], totp: "123456" });
       expect(s2.status).toBe(200);

@@ -109,11 +109,13 @@ Options (sync — generate mock-fast.json from an api-spec/ tree):
   -f, --file <path>      (with --from-mock) source DSL (default: mock-fast.json)
       --force            (with --from-mock) overwrite an existing api-spec/
 
-Options (watch — run the server and sync on demand, Flutter/Expo style):
-  -d, --dir <path>       api-spec folder (default: api-spec)
-  -o, --out <path>       Output DSL file (default: mock-fast.json)
+Options (watch — mock-fast.json is the source; api-spec/ is the readable view):
+  -f, --file <path>      mock-fast.json source (default: mock-fast.json)
+  -d, --dir <path>       api-spec view folder (default: api-spec)
   -p, --port <n>         HTTP port (default: 3001)
-                         press 'r' to sync + reload, 'q' to quit
+                         keys: r refresh view from mock (resets changes)
+                               m map changes since last r → .mock-fast/changes.json
+                               q quit
 
       --help             Show this help
 
@@ -196,7 +198,7 @@ async function main() {
   if (args.command === "watch") {
     await runWatch({
       dir: args.dir,
-      out: args.out,
+      file: args.file ?? args.out,
       port: args.port,
       host: args.host,
       adminPort: args.adminPort,

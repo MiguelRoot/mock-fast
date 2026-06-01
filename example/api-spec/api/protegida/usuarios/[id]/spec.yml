@@ -1,9 +1,9 @@
 method: GET
 cases:
-  ok:
+  s200:
     match: { "params.id": "1" }
     response: response-200.json
     status: 200
-  not_found:
+  s404:
     response: response-404.json
     status: 404

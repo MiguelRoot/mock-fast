@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync, writeFileSync, existsSync, rmSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import path from "node:path";
 
 import { stringify as stringifyYaml } from "yaml";
@@ -79,18 +79,14 @@ function extToSpec(ext: any): { auth?: string; behavior?: any } {
 }
 
 /** Status code → a stable variant name (mirrors the skill's naming table). */
-const VARIANT_BY_STATUS: Record<number, string> = {
-  401: "unauthorized",
-  403: "forbidden",
-  404: "not_found",
-  409: "conflict",
-  422: "unprocessable",
-  423: "locked",
-};
-function variantName(status: number, idx: number, hasWhen: boolean): string {
-  if (status >= 200 && status < 300) return idx === 0 ? "ok" : `ok${idx + 1}`;
-  if (!hasWhen) return VARIANT_BY_STATUS[status] ?? `error${status}`;
-  return VARIANT_BY_STATUS[status] ?? `case${idx + 1}`;
+/** Filename for the Nth response of a given status: response-404.json, response-404-v2.json, ... */
+function responseFile(status: number, nth: number): string {
+  return nth === 0 ? `response-${status}.json` : `response-${status}-v${nth + 1}.json`;
+}
+
+/** Case key for the Nth response of a given status: s404, s404_v2, ... (YAML keys can't start with a digit). */
+function caseKey(status: number, nth: number): string {
+  return nth === 0 ? `s${status}` : `s${status}_v${nth + 1}`;
 }
 
 interface ReverseResult {
@@ -169,13 +165,15 @@ export async function reverseToApiSpec(
 
     const cases: Record<string, any> = {};
     const dynAll = new Map<string, string>(); // path → expr, merged across cases
+    const seenByStatus = new Map<number, number>(); // status → how many seen so far
 
     const list = ep.responses ?? [{ status: ep.response.status, body: ep.response.body, when: undefined }];
-    list.forEach((r: any, idx: number) => {
+    list.forEach((r: any) => {
       const status = r.status ?? 200;
-      const hasWhen = !!r.when;
-      const variant = variantName(status, idx, hasWhen);
-      const file = ep.responses ? `response-${status}-${variant}.json` : `response-${status}.json`;
+      const nth = seenByStatus.get(status) ?? 0;
+      seenByStatus.set(status, nth + 1);
+      const file = responseFile(status, nth);
+      const key = caseKey(status, nth);
 
       const dyn: DynEntry[] = [];
       const body = materialize(r.body ?? {}, "", dyn);
@@ -187,7 +185,7 @@ export async function reverseToApiSpec(
       if (r.when) c.match = r.when;
       c.response = file;
       c.status = status;
-      cases[variant] = c;
+      cases[key] = c;
     });
 
     spec.cases = cases;

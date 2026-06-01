@@ -3,7 +3,7 @@ auth: none
 behavior:
   latency_ms: [50, 200]
 cases:
-  ok:
+  s200:
     response: response-200.json
     status: 200
 dynamic:
