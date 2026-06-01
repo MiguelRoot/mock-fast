@@ -1,6 +1,3 @@
-# Nodo de configuración compartida (el "layout") del subárbol /api/protegida.
-# Aquí vive el SEGURO DEL TOKEN: todos los hijos heredan auth: bearer (y el behavior).
-# No tiene cases: no es un endpoint, solo aporta el segmento /protegida + config heredable.
 auth: bearer
 behavior:
   latency_ms: [100, 400]

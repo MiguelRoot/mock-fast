@@ -1,6 +1,5 @@
-description: Tarifas públicas. OVERRIDE — desactiva el guard heredado de protegida.
 method: GET
-auth: none      # override: anula el bearer heredado (como requireAuth: false)
+auth: none
 cases:
   ok:
     response: response-200.json

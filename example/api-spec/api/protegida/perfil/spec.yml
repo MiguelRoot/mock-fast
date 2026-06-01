@@ -1,4 +1,3 @@
-description: Perfil del usuario autenticado. Hereda el auth bearer (y behavior) de protegida.
 method: GET
 cases:
   ok:

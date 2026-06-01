@@ -1,44 +1,25 @@
-description: Login con flujo de 2 pasos sobre la misma URL.
-
-# URL derivada de las carpetas: /autenticacion-mobile-service/autenticacion
 method: POST
 auth: none
-
-# behavior → extensiones del mock. Aquí: lockout de login tras 3 intentos sin éxito.
 behavior:
   rate_limit:
     by: "{{body.usuario}}"
     window: on-success
     max: 3
     on_limit: { status: 423, body: { error: "Cuenta temporalmente bloqueada" } }
-
-# responses[] condicionales: match → when ; el caso sin match es el fallback.
 cases:
   step1:
-    when: body.totp es null y credenciales válidas
     match: { "body.usuario": "jperez", "body.contrasena": "test1234", "body.totp": null }
     request: request-step1.json
     response: response-200-step1.json
     status: 200
   step2:
-    when: body.totp correcto y credenciales válidas
     match: { "body.usuario": "jperez", "body.contrasena": "test1234", "body.totp": "123456" }
     request: request-step2.json
     response: response-200-step2.json
     status: 200
   unauthorized:
-    when: credenciales o TOTP inválidos   # sin match → fallback (por exclusión)
     response: response-401.json
     status: 401
-
-# dynamic: campos volátiles. La fixture lleva valor concreto; aquí vive la expresión.
 dynamic:
   "timestamp": "{{now}}"
   "data.aplicaciones.0.token": "Bearer mock.{{uuid}}"
-
-request_constraints:
-  - "`aplicaciones` debe ser el array estático `[\"VS\"]` (se recibe, no se ramifica por él)"
-
-notes:
-  - "`usuario.fecRegistro` suele venir null"
-  - "`aplicaciones[].perfilesDetails` siempre null, candidato a ignorar"

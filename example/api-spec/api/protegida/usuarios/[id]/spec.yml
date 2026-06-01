@@ -1,15 +1,9 @@
-description: >
-  Usuario por id. Demuestra PARAM DINÁMICO ([id] → :id) y un caso 404
-  (gap de cobertura cubierto: match sobre params.id, fallback 404).
 method: GET
-# path por defecto = [id] → /:id  ·  efectivo: /api/protegida/usuarios/:id
 cases:
   ok:
-    when: id existente
     match: { "params.id": "1" }
     response: response-200.json
     status: 200
   not_found:
-    when: id inexistente (fallback)
     response: response-404.json
     status: 404

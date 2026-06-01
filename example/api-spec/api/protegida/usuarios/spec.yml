@@ -1,4 +1,3 @@
-description: Lista de usuarios. Carpeta que es ENDPOINT y a la vez PADRE de [id].
 method: GET
 cases:
   ok:
