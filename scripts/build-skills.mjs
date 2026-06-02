@@ -3,7 +3,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 const { version } = JSON.parse(readFileSync("package.json", "utf8"));
-const skills = ["mock-fast", "mock-fast-spec"];
+const skills = ["mock-fast"];
 
 for (const s of skills) {
   mkdirSync(`dist/${s}`, { recursive: true });

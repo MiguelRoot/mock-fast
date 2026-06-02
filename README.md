@@ -4,7 +4,7 @@ Declarative mock server with a small, scalable JSON DSL. One command to start, n
 
 mock-fast doesn't reinvent the engine: it builds on [@mocks-server/main](https://www.mocks-server.org) and adds a more concise DSL, route inheritance, and an extension pipeline you grow with a single file.
 
-> 📦 **Ships with AI skills.** After installing, you'll find two Agent Skills under your install folder (`node_modules/@killki/mock-fast/dist/`) — `mock-fast` (DSL reference) and `mock-fast-spec` (spec-driven authoring) — so an assistant like Claude Code can build and maintain your mocks. [Details below](#skills-ai-assisted-authoring).
+> 📦 **Ships with an AI skill.** After installing, you'll find an Agent Skill under your install folder (`node_modules/@killki/mock-fast/dist/mock-fast/`) — the DSL reference — so an assistant like Claude Code can write your mocks. [Details below](#skill-ai-assisted-authoring).
 
 ## Philosophy
 
@@ -383,76 +383,11 @@ Cautions, because it stays a **mock**:
 - `rateLimit` counters are in-memory: they reset on restart and aren't shared across replicas. Run a single instance if that matters.
 - No HTTPS — put it behind a reverse proxy or your platform's TLS.
 
-## Skills (AI-assisted authoring)
+## Skill (AI-assisted authoring)
 
-mock-fast ships two [Agent Skills](https://docs.claude.com/en/docs/claude-code/skills) so an AI assistant (e.g. Claude Code) can build and maintain mocks for you. They're published under `dist/` and live in the repo at [`mock-fast/SKILL.md`](mock-fast/SKILL.md) and [`mock-fast-spec/SKILL.md`](mock-fast-spec/SKILL.md):
+mock-fast ships an [Agent Skill](https://docs.claude.com/en/docs/claude-code/skills) so an AI assistant (e.g. Claude Code) can write your mocks for you. It's published under `dist/` and lives in the repo at [`mock-fast/SKILL.md`](mock-fast/SKILL.md):
 
-- **`mock-fast`** — the DSL reference. Teaches the assistant the full syntax (route tree, `when`, extensions, templating) so it can write `mock-fast.json` by hand.
-- **`mock-fast-spec`** 🧪 (experimental) — the agentic `api-spec/` workflow. You keep one plain JSON per request/response plus a small `spec.yml` per endpoint (the logic); the assistant writes/fixes the `spec.yml` and edits JSON, while the CLI (`sync` / `watch` / `sync --from-mock`) does the deterministic transforms. See [the section below](#the-api-spec-view--experimental).
-
-## The `api-spec/` view 🧪 (experimental)
-
-> **Experimental.** A friendlier way to manage a mock with an AI assistant. The nested `mock-fast.json` is hard to scan, so this mode projects it into one plain JSON per request/response (easy to read, easy to spot a missing field) plus a tiny `spec.yml` per endpoint that holds the logic (method, auth, which response for which request). You edit the readable files; the assistant applies your edits back to the mock.
-
-### What you need first
-
-A **`mock-fast.json`** in your folder — it's the source of truth. Don't have one yet? Create this minimal file and you're set:
-
-```json
-{ "routes": [ { "url": "/health", "method": "get", "response": { "status": 200, "body": { "ok": true } } } ] }
-```
-
-### Quick start — `mock-fast watch`
-
-From the folder that contains your `mock-fast.json`:
-
-```bash
-npx mock-fast watch
-```
-
-What happens, in order:
-
-1. It generates a readable **`api-spec/`** folder from your `mock-fast.json` (one folder per route, with plain `response-*.json` files).
-2. It starts the mock server (prints the URL, e.g. `http://127.0.0.1:3001`). *If 3001 is busy it just uses the next free port and tells you — you don't have to do anything.*
-3. It waits for a keypress:
-
-| Key | What it does |
-|---|---|
-| `r` | Re-generate the `api-spec/` view from the mock, and clear the change log. Your reset point. |
-| `m` | Save what you edited in `api-spec/` since the last `r` into `.mock-fast/changes.json` (which file + line). |
-| `q` | Quit. |
-
-### The everyday loop
-
-```
-1. npx mock-fast watch        → starts; you see the api-spec/ view
-2. edit a file in api-spec/   → e.g. add a field to a response
-3. press  m                   → records exactly what changed
-4. tell the assistant:        → "actualizá el último cambio en el mock"
-                                 it reads .mock-fast/changes.json, applies just that
-                                 to mock-fast.json (no scanning every file)
-5. press  r                   → refreshes the view; you're in sync
-```
-
-The server runs on `mock-fast.json` and reloads automatically when it changes. A failed step never crashes it — it keeps serving the last good mock.
-
-### One-shot conversions (no watch)
-
-```bash
-npx mock-fast sync             # forward: build mock-fast.json FROM an api-spec/ tree
-npx mock-fast sync --from-mock # reverse: rebuild the whole api-spec/ view FROM mock-fast.json
-```
-
-`--from-mock` won't overwrite an existing `api-spec/` unless you add `--force`. It's a **seed**: dynamic values like `{{uuid}}`/`{{now}}` become sample data in the files and are recorded under `dynamic` — replace them with real captures when you have them.
-
-### Folder & file conventions (like Next.js)
-
-- The **folder path is the URL**: `usuarios/` → `/usuarios`, `[id]/` → `/:id`, `[...rest]/` → catch-all, `(group)/` adds no URL segment, `_private/` is ignored.
-- `_group.yml` in a folder shares `auth`/`behavior` with everything under it (e.g. one auth guard for a whole subtree).
-- Files are named by status: `response-200.json`, `response-404.json`, a second of the same status is `-v2`; requests are `request.json`, `request-v2.json`.
-- A `spec.yml` is **pure logic** — no comments or prose.
-
-Full details live in the [`mock-fast-spec`](mock-fast-spec/SKILL.md) skill; there's a worked tree in [`example/`](example/).
+- **`mock-fast`** — the DSL reference. Teaches the assistant the full syntax (route tree, `when`, extensions, templating) so it can write `mock-fast.json` for you.
 
 ## Complete example
 

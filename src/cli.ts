@@ -1,13 +1,7 @@
 #!/usr/bin/env node
-import { writeFileSync } from "node:fs";
-import path from "node:path";
-
 import { createMockFast } from "./index.js";
 import { LoaderError } from "./loader.js";
 import { runDeploy } from "./deploy.js";
-import { generateDsl, SyncError } from "./sync/generate.js";
-import { runWatch } from "./sync/watch.js";
-import { reverseToApiSpec } from "./sync/reverse.js";
 
 interface CliArgs {
   command: string;
@@ -18,9 +12,6 @@ interface CliArgs {
   watch?: boolean;
   out?: string;
   compose?: boolean;
-  dir?: string;
-  fromMock?: boolean;
-  force?: boolean;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -54,18 +45,8 @@ function parseArgs(argv: string[]): CliArgs {
       case "--out":
         args.out = rest.shift();
         break;
-      case "-d":
-      case "--dir":
-        args.dir = rest.shift();
-        break;
       case "--compose":
         args.compose = true;
-        break;
-      case "--from-mock":
-        args.fromMock = true;
-        break;
-      case "--force":
-        args.force = true;
         break;
       case "--help":
         printHelp();
@@ -85,8 +66,6 @@ function printHelp() {
 Usage:
   mock-fast start [options]
   mock-fast deploy [options]
-  mock-fast sync [options]
-  mock-fast watch [options]
 
 Options (start):
   -f, --file <path>      Path to the DSL JSON file
@@ -102,28 +81,12 @@ Options (deploy — generate a Docker-ready bundle):
   -p, --port <n>         Port baked into the Dockerfile (default: 3001)
       --compose          Also emit a docker-compose.yml
 
-Options (sync — generate mock-fast.json from an api-spec/ tree):
-  -d, --dir <path>       api-spec folder (default: api-spec)
-  -o, --out <path>       Output DSL file (default: mock-fast.json)
-      --from-mock        Reverse: regenerate the api-spec/ tree FROM a mock-fast.json
-  -f, --file <path>      (with --from-mock) source DSL (default: mock-fast.json)
-      --force            (with --from-mock) overwrite an existing api-spec/
-
-Options (watch — mock-fast.json is the source; api-spec/ is the readable view):
-  -f, --file <path>      mock-fast.json source (default: mock-fast.json)
-  -d, --dir <path>       api-spec view folder (default: api-spec)
-  -p, --port <n>         HTTP port (default: 3001)
-                         keys: r refresh view from mock (resets changes)
-                               m map changes since last r → .mock-fast/changes.json
-                               q quit
-
       --help             Show this help
 
 Examples:
   mock-fast start
+  mock-fast start --file ./fixtures/mock.json --port 4000
   mock-fast deploy --out build/mock --port 8080 --compose
-  mock-fast sync --dir api-spec --out mock-fast.json
-  mock-fast watch
 `);
 }
 
@@ -147,62 +110,11 @@ async function deploy(args: CliArgs) {
   }
 }
 
-async function sync(args: CliArgs) {
-  const dir = path.resolve(process.cwd(), args.dir ?? "api-spec");
-
-  if (args.fromMock) {
-    // reverse: mock-fast.json → api-spec/ tree (seed)
-    const dslFile = path.resolve(process.cwd(), args.file ?? "mock-fast.json");
-    try {
-      const r = await reverseToApiSpec(dslFile, dir, { force: args.force });
-      console.log(`[mock-fast] sync --from-mock: ${dir} (${r.folders} folder(s), ${r.files.length} file(s)) from ${dslFile}`);
-      console.log(`  Note: this is a SEED — fixtures are samples for templated fields; replace with real captures.`);
-      for (const n of r.notes) console.log(`  • ${n}`);
-    } catch (err) {
-      if (err instanceof SyncError) {
-        console.error(`[mock-fast] sync --from-mock failed:\n${err.message}`);
-        process.exit(1);
-      }
-      throw err;
-    }
-    return;
-  }
-
-  const out = path.resolve(process.cwd(), args.out ?? "mock-fast.json");
-  try {
-    const dsl = generateDsl(dir);
-    writeFileSync(out, JSON.stringify(dsl, null, 2) + "\n");
-    console.log(`[mock-fast] sync: ${dsl.routes.length} route(s) from ${dir} → ${out}`);
-  } catch (err) {
-    if (err instanceof SyncError) {
-      console.error(`[mock-fast] sync failed:\n${err.message}`);
-      process.exit(1);
-    }
-    throw err;
-  }
-}
-
 async function main() {
   const args = parseArgs(process.argv);
 
   if (args.command === "deploy") {
     await deploy(args);
-    return;
-  }
-
-  if (args.command === "sync") {
-    await sync(args);
-    return;
-  }
-
-  if (args.command === "watch") {
-    await runWatch({
-      dir: args.dir,
-      file: args.file ?? args.out,
-      port: args.port,
-      host: args.host,
-      adminPort: args.adminPort,
-    });
     return;
   }
 
