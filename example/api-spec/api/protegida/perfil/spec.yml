@@ -1,8 +1,0 @@
-method: GET
-cases:
-  s200:
-    response: response-200.json
-    status: 200
-dynamic:
-  "data.sessionId": "{{uuid}}"
-  "timestamp": "{{now}}"

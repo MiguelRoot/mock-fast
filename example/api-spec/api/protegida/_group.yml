@@ -1,4 +1,0 @@
-auth: bearer
-behavior:
-  latency_ms: [100, 400]
-  error_rate: 0.05
