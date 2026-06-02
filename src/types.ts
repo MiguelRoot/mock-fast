@@ -37,12 +37,21 @@ export interface Extensions {
   rateLimit?: RateLimitConfig;
 }
 
+export interface FilterConfig {
+  in: string;
+  fields: string[];
+  by: string;
+  op?: "contains" | "equals" | "startsWith";
+  caseSensitive?: boolean;
+}
+
 export interface DslRouteNode {
   id?: string;
   url: string;
   method?: HttpMethod;
   headers?: Record<string, string>;
   extensions?: Extensions;
+  filter?: FilterConfig;
   response?: ResponseDef;
   responses?: MatchableResponseDef[];
   routes?: DslRouteNode[];
@@ -72,6 +81,7 @@ export interface FlatRoute {
   method: HttpMethod;
   headers: Record<string, string>;
   extensions: Extensions;
+  filter?: FilterConfig;
   responses: MatchableResponseDef[];
 }
 

@@ -51,12 +51,24 @@ const extensions = z
   })
   .strict();
 
+// Optional, non-breaking: filters an array inside the response body before sending.
+const filterConfig = z
+  .object({
+    in: z.string().min(1), // dotted path to the array in the body (e.g. "data")
+    fields: z.array(z.string().min(1)).min(1), // which item fields to search
+    by: z.string().min(1), // dotted path to the search term (e.g. "body.filtro")
+    op: z.enum(["contains", "equals", "startsWith"]).optional(), // default: contains
+    caseSensitive: z.boolean().optional(), // default: false
+  })
+  .strict();
+
 type RouteNodeIn = {
   id?: string;
   url: string;
   method?: z.infer<typeof httpMethod>;
   headers?: Record<string, string>;
   extensions?: z.infer<typeof extensions>;
+  filter?: z.infer<typeof filterConfig>;
   response?: z.infer<typeof responseDef>;
   responses?: z.infer<typeof matchableResponseDef>[];
   routes?: RouteNodeIn[];
@@ -70,6 +82,7 @@ const routeNode: z.ZodType<RouteNodeIn> = z.lazy(() =>
       method: httpMethod.optional(),
       headers: z.record(z.string()).optional(),
       extensions: extensions.optional(),
+      filter: filterConfig.optional(),
       response: responseDef.optional(),
       responses: z.array(matchableResponseDef).min(1).optional(),
       routes: z.array(routeNode).optional(),

@@ -198,6 +198,45 @@ Across keys of a single `when`, the operator is **implicit AND**. For OR, declar
 >
 > **Operators (`gt`, `regex`, `in`, ...) are not in v1**. The DSL shape (`when: { "path": value }`) is stable; operators will arrive as object-typed values (`{ "body.amount": { "gt": 100 } }`) without breaking this syntax.
 
+## Filtering a list (search)
+
+Sometimes the request carries a **search term** and the endpoint must return only the matching items — a real filter over a dataset, not a fixed response. Add an optional `filter` to the route. Your response body stays exactly as you wrote it; `filter` just trims the chosen array before sending.
+
+```json
+{
+  "url": "/anexos",
+  "method": "post",
+  "filter": { "in": "data", "fields": ["titulo", "descripcion"], "by": "body.filtro" },
+  "response": {
+    "status": 200,
+    "body": {
+      "code": 200,
+      "status": "success",
+      "data": [
+        { "codigo": "11", "titulo": "Anexo Museo", "descripcion": "11 - ANEXO MUSEO DE LA INQUISICION" },
+        { "codigo": "12", "titulo": "Sede Central", "descripcion": "12 - SEDE CENTRAL LIMA" }
+      ]
+    }
+  }
+}
+```
+
+A request body `{ "filtro": "nex" }` returns only the items whose `titulo` **or** `descripcion` contain `nex` (case-insensitive). `{ "filtro": "" }` or no term → the full list (no filtering).
+
+| Field | Meaning |
+|---|---|
+| `in` | Dotted path to the array in the body to filter (e.g. `data`, `result.items`). |
+| `fields` | Item fields to search; an item matches if **any** of them matches. |
+| `by` | Dotted path to the search term in the request (`body.filtro`, `query.q`, …). |
+| `op` | `contains` (default), `equals`, or `startsWith`. |
+| `caseSensitive` | `false` by default. |
+
+Notes:
+
+- `filter` is **opt-in** — routes without it behave exactly as before.
+- It runs **after** templating, so the array can contain `{{...}}` values.
+- If `in` doesn't point to an array, the body is sent untouched.
+
 ## Extensions
 
 Each extension activates when it appears in a route's `extensions` (or a parent's, via inheritance). They run in this order:

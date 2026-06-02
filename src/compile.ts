@@ -3,6 +3,7 @@ import type { FlatRoute, RuntimeContext } from "./types.js";
 import { pipeline, clearOnSuccessKeys } from "./extensions/index.js";
 import { buildContext, renderValue } from "./templating.js";
 import { pickResponse } from "./matcher.js";
+import { applyFilter } from "./filter.js";
 
 interface MocksServerRoute {
   id: string;
@@ -53,7 +54,10 @@ function buildMiddleware(route: FlatRoute, ctx: RuntimeContext) {
       } else if (typeof body === "string") {
         res.send(renderValue(body, tCtx));
       } else {
-        res.json(renderValue(body, tCtx));
+        const rendered: unknown = renderValue(body, tCtx);
+        // Optional, opt-in: trim an array in the body to items matching a search term.
+        const finalBody = route.filter ? applyFilter(rendered, route.filter, tCtx) : rendered;
+        res.json(finalBody);
       }
 
       if (status >= 200 && status < 300) {

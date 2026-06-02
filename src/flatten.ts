@@ -58,6 +58,7 @@ export function flattenRoutes(roots: DslRouteNode[]): FlatRoute[] {
         method,
         headers,
         extensions,
+        ...(node.filter ? { filter: node.filter } : {}),
         responses,
       });
     }

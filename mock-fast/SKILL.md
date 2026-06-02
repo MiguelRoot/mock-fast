@@ -44,6 +44,7 @@ Every node in `routes[]` (and inside `routes[].routes[]`) follows the same shape
   "method":   "get|post|put|patch|delete|options|head",  // default "get"
   "headers":  { "X-Header": "value" },        // optional, merged with parent
   "extensions": { /* see below */ },           // optional, merged with parent
+  "filter":   { "in": "data", "fields": [...], "by": "body.q" }, // optional, search a list
   "response": { "status": 200, "headers": {}, "body": ... },     // single response
   "responses": [ { "when": {...}, "status": ..., "body": ... } ], // conditional set (XOR with response)
   "routes":   [ /* nested children */ ]
@@ -111,6 +112,33 @@ To **disable** an inherited extension in a child, set it explicitly:
 ```json
 "extensions": { "requireAuth": false }
 ```
+
+## Filtering a list (`filter`)
+
+When the request carries a **search term** and the endpoint must return only matching items (real filtering over a dataset, not a fixed payload), add an optional `filter` to the route node. The response body is written normally with the **full** list; `filter` trims the array before sending.
+
+```json
+{
+  "url": "/anexos",
+  "method": "post",
+  "filter": { "in": "data", "fields": ["titulo", "descripcion"], "by": "body.filtro" },
+  "response": { "status": 200, "body": { "data": [ /* full list */ ] } }
+}
+```
+
+`{ "filtro": "nex" }` → only items whose `titulo` OR `descripcion` contain `nex` (case-insensitive). Empty/missing term → full list.
+
+| Field | Meaning |
+|---|---|
+| `in` | dotted path to the array in the body (`data`, `result.items`) |
+| `fields` | item fields to search; matches if **any** matches |
+| `by` | dotted path to the search term (`body.filtro`, `query.q`) |
+| `op` | `contains` (default) \| `equals` \| `startsWith` |
+| `caseSensitive` | default `false` |
+
+- **Opt-in and non-breaking**: routes without `filter` behave exactly as before.
+- Runs **after** templating; works alongside `response` or `responses` (filters the chosen body).
+- If `in` isn't an array, the body is sent untouched.
 
 ## Extensions
 
