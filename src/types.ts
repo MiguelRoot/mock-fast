@@ -45,6 +45,14 @@ export interface FilterConfig {
   caseSensitive?: boolean;
 }
 
+export interface PaginateConfig {
+  of: string;
+  page: string;
+  size: string;
+  defaultSize?: number;
+  total?: string;
+}
+
 export interface DslRouteNode {
   id?: string;
   url: string;
@@ -52,6 +60,8 @@ export interface DslRouteNode {
   headers?: Record<string, string>;
   extensions?: Extensions;
   filter?: FilterConfig;
+  filters?: FilterConfig[];
+  paginate?: PaginateConfig;
   response?: ResponseDef;
   responses?: MatchableResponseDef[];
   routes?: DslRouteNode[];
@@ -82,6 +92,8 @@ export interface FlatRoute {
   headers: Record<string, string>;
   extensions: Extensions;
   filter?: FilterConfig;
+  filters?: FilterConfig[];
+  paginate?: PaginateConfig;
   responses: MatchableResponseDef[];
 }
 

@@ -45,6 +45,8 @@ Every node in `routes[]` (and inside `routes[].routes[]`) follows the same shape
   "headers":  { "X-Header": "value" },        // optional, merged with parent
   "extensions": { /* see below */ },           // optional, merged with parent
   "filter":   { "in": "data", "fields": [...], "by": "body.q" }, // optional, search a list
+  "filters":  [ /* several filters, AND */ ],   // optional
+  "paginate": { "of": "data", "page": "body.page", "size": "body.pageSize" }, // optional
   "response": { "status": 200, "headers": {}, "body": ... },     // single response
   "responses": [ { "when": {...}, "status": ..., "body": ... } ], // conditional set (XOR with response)
   "routes":   [ /* nested children */ ]
@@ -139,6 +141,28 @@ When the request carries a **search term** and the endpoint must return only mat
 - **Opt-in and non-breaking**: routes without `filter` behave exactly as before.
 - Runs **after** templating; works alongside `response` or `responses` (filters the chosen body).
 - If `in` isn't an array, the body is sent untouched.
+
+### Several filters (AND) + pagination
+
+For a real listing — several optional filters (sede AND oficina AND estado) plus pagination — use `filters` (array, AND between them) and `paginate`. A filter whose term is empty/missing is **skipped**, so optional params just don't filter.
+
+```json
+{
+  "url": "/ubicaciones",
+  "method": "post",
+  "filters": [
+    { "in": "data", "fields": ["codigoSede"],    "by": "body.codigoSede",    "op": "equals" },
+    { "in": "data", "fields": ["codigoOficina"], "by": "body.codigoOficina", "op": "equals" },
+    { "in": "data", "fields": ["codigoEstado"],  "by": "body.codigoEstado",  "op": "equals" }
+  ],
+  "paginate": { "of": "data", "page": "body.page", "size": "body.pageSize", "total": "totalRegistros" },
+  "response": { "status": 200, "body": { "data": [ /* full list */ ], "totalRegistros": 0 } }
+}
+```
+
+`paginate`: `of` (array path), `page` (1-based, dotted path; missing→1), `size` (dotted path), `defaultSize` (when size missing, default 20), `total` (optional body path to write the count **before** paging).
+
+Order of transforms: `filter` → `filters` (AND) → `paginate`. All opt-in.
 
 ## Extensions
 

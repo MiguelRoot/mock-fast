@@ -1,4 +1,4 @@
-import type { FilterConfig } from "./types.js";
+import type { FilterConfig, PaginateConfig } from "./types.js";
 import type { TemplateContext } from "./templating.js";
 
 /** Reads a dotted path from an object (e.g. "data" or "result.items"). */
@@ -70,5 +70,49 @@ export function applyFilter(
 
   const clone = JSON.parse(JSON.stringify(body)) as Record<string, unknown>;
   setPath(clone, cfg.in, filtered);
+  return clone;
+}
+
+/**
+ * Applies several filters with **AND** between them (each narrows the same array).
+ * Filters whose search term is empty/missing are skipped — so optional params just
+ * don't filter. All filters should target the same `in` array.
+ */
+export function applyFilters(
+  body: unknown,
+  filters: FilterConfig[],
+  templateCtx: TemplateContext
+): unknown {
+  return filters.reduce<unknown>((acc, cfg) => applyFilter(acc, cfg, templateCtx), body);
+}
+
+/**
+ * Returns one page of an array in the body. `page` is 1-based; missing/invalid page
+ * → 1, missing size → `defaultSize` (or 20). If `total` is given, writes the full
+ * count (before paging) at that body path. No-op if `of` isn't an array.
+ */
+export function applyPaginate(
+  body: unknown,
+  cfg: PaginateConfig,
+  templateCtx: TemplateContext
+): unknown {
+  if (body == null || typeof body !== "object") return body;
+
+  const arr = getPath(body, cfg.of);
+  if (!Array.isArray(arr)) return body;
+
+  const toInt = (v: unknown, fallback: number): number => {
+    const n = parseInt(String(v ?? ""), 10);
+    return Number.isFinite(n) && n > 0 ? n : fallback;
+  };
+  const page = toInt(getPath(templateCtx, cfg.page), 1);
+  const size = toInt(getPath(templateCtx, cfg.size), cfg.defaultSize ?? 20);
+
+  const start = (page - 1) * size;
+  const pageItems = arr.slice(start, start + size);
+
+  const clone = JSON.parse(JSON.stringify(body)) as Record<string, unknown>;
+  setPath(clone, cfg.of, pageItems);
+  if (cfg.total) setPath(clone, cfg.total, arr.length);
   return clone;
 }

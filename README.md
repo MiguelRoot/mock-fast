@@ -237,6 +237,38 @@ Notes:
 - It runs **after** templating, so the array can contain `{{...}}` values.
 - If `in` doesn't point to an array, the body is sent untouched.
 
+### Several filters (AND) + pagination
+
+A real listing usually combines **several optional filters** (sede AND oficina AND estado) and **pagination**. Use `filters` (an array, AND between them) and `paginate`:
+
+```json
+{
+  "url": "/ubicaciones",
+  "method": "post",
+  "filters": [
+    { "in": "data", "fields": ["codigoSede"],    "by": "body.codigoSede",    "op": "equals" },
+    { "in": "data", "fields": ["codigoOficina"], "by": "body.codigoOficina", "op": "equals" },
+    { "in": "data", "fields": ["codigoEstado"],  "by": "body.codigoEstado",  "op": "equals" }
+  ],
+  "paginate": { "of": "data", "page": "body.page", "size": "body.pageSize", "total": "totalRegistros" },
+  "response": { "status": 200, "body": { "code": 200, "data": [ /* full list */ ], "totalRegistros": 0 } }
+}
+```
+
+Each filter whose term is **empty or missing is skipped** — so optional params just don't filter. The order applied is: `filter` → `filters` (AND) → `paginate`.
+
+`paginate` fields:
+
+| Field | Meaning |
+|---|---|
+| `of` | Dotted path to the array to page. |
+| `page` | Dotted path to the 1-based page number (`body.page`). Missing/invalid → 1. |
+| `size` | Dotted path to the page size (`body.pageSize`). |
+| `defaultSize` | Used when `size` is missing (default `20`). |
+| `total` | Optional body path where the **total count before paging** is written (e.g. `totalRegistros`). |
+
+So with `{ "codigoSede": "11", "codigoOficina": "", "page": "2", "pageSize": "10" }`: filters by sede only (oficina is empty → skipped), then returns page 2 of 10, and writes the matched total into `totalRegistros`.
+
 ## Extensions
 
 Each extension activates when it appears in a route's `extensions` (or a parent's, via inheritance). They run in this order:

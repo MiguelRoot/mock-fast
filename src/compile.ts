@@ -3,7 +3,7 @@ import type { FlatRoute, RuntimeContext } from "./types.js";
 import { pipeline, clearOnSuccessKeys } from "./extensions/index.js";
 import { buildContext, renderValue } from "./templating.js";
 import { pickResponse } from "./matcher.js";
-import { applyFilter } from "./filter.js";
+import { applyFilter, applyFilters, applyPaginate } from "./filter.js";
 
 interface MocksServerRoute {
   id: string;
@@ -54,9 +54,12 @@ function buildMiddleware(route: FlatRoute, ctx: RuntimeContext) {
       } else if (typeof body === "string") {
         res.send(renderValue(body, tCtx));
       } else {
-        const rendered: unknown = renderValue(body, tCtx);
-        // Optional, opt-in: trim an array in the body to items matching a search term.
-        const finalBody = route.filter ? applyFilter(rendered, route.filter, tCtx) : rendered;
+        // Optional, opt-in transforms over the rendered body, in order:
+        // single filter → multi-filter (AND) → pagination. Each is a no-op if absent.
+        let finalBody: unknown = renderValue(body, tCtx);
+        if (route.filter) finalBody = applyFilter(finalBody, route.filter, tCtx);
+        if (route.filters) finalBody = applyFilters(finalBody, route.filters, tCtx);
+        if (route.paginate) finalBody = applyPaginate(finalBody, route.paginate, tCtx);
         res.json(finalBody);
       }
 

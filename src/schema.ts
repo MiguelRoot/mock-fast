@@ -62,6 +62,17 @@ const filterConfig = z
   })
   .strict();
 
+// Optional: page a (possibly already-filtered) array, returning just that page.
+const paginateConfig = z
+  .object({
+    of: z.string().min(1), // dotted path to the array (e.g. "data")
+    page: z.string().min(1), // dotted path to the 1-based page number (e.g. "body.page")
+    size: z.string().min(1), // dotted path to the page size (e.g. "body.pageSize")
+    defaultSize: z.number().int().min(1).optional(), // used when size is missing (default 20)
+    total: z.string().min(1).optional(), // optional body path to write the total count into
+  })
+  .strict();
+
 type RouteNodeIn = {
   id?: string;
   url: string;
@@ -69,6 +80,8 @@ type RouteNodeIn = {
   headers?: Record<string, string>;
   extensions?: z.infer<typeof extensions>;
   filter?: z.infer<typeof filterConfig>;
+  filters?: z.infer<typeof filterConfig>[];
+  paginate?: z.infer<typeof paginateConfig>;
   response?: z.infer<typeof responseDef>;
   responses?: z.infer<typeof matchableResponseDef>[];
   routes?: RouteNodeIn[];
@@ -83,6 +96,8 @@ const routeNode: z.ZodType<RouteNodeIn> = z.lazy(() =>
       headers: z.record(z.string()).optional(),
       extensions: extensions.optional(),
       filter: filterConfig.optional(),
+      filters: z.array(filterConfig).min(1).optional(),
+      paginate: paginateConfig.optional(),
       response: responseDef.optional(),
       responses: z.array(matchableResponseDef).min(1).optional(),
       routes: z.array(routeNode).optional(),

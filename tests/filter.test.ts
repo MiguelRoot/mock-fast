@@ -84,3 +84,107 @@ describe("filter — search an array in the response body (opt-in)", () => {
     expect(r.data).toHaveLength(3); // no filter declared → nothing is filtered
   });
 });
+
+const UBIC = [
+  { codigoSede: "11", codigoOficina: "1", codigoEstado: "A", nombre: "U1" },
+  { codigoSede: "11", codigoOficina: "1", codigoEstado: "I", nombre: "U2" },
+  { codigoSede: "11", codigoOficina: "2", codigoEstado: "A", nombre: "U3" },
+  { codigoSede: "22", codigoOficina: "1", codigoEstado: "A", nombre: "U4" },
+];
+
+const eqFilter = (field: string) => ({ in: "data", fields: [field], by: `body.${field}`, op: "equals" });
+
+const postU = (base: string, body: unknown) =>
+  fetch(base + "/ubic", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then((r) => r.json());
+
+describe("filters (AND) — several optional filters narrowing one array", () => {
+  function dsl(extra: Record<string, unknown> = {}) {
+    return {
+      routes: [
+        {
+          url: "/ubic",
+          method: "post",
+          filters: [eqFilter("codigoSede"), eqFilter("codigoOficina"), eqFilter("codigoEstado")],
+          ...extra,
+          response: { status: 200, body: { data: UBIC, total: 0 } },
+        },
+      ],
+    } as unknown as DslDocument;
+  }
+
+  it("AND of three filters", async () => {
+    server = await startTestServer(dsl());
+    const r = await postU(server.base, { codigoSede: "11", codigoOficina: "1", codigoEstado: "A" });
+    expect(r.data.map((x: any) => x.nombre)).toEqual(["U1"]);
+  });
+
+  it("skips filters whose term is empty (optional params)", async () => {
+    server = await startTestServer(dsl());
+    const r = await postU(server.base, { codigoSede: "11", codigoOficina: "", codigoEstado: "" });
+    expect(r.data.map((x: any) => x.nombre)).toEqual(["U1", "U2", "U3"]); // only sede applied
+  });
+
+  it("no filters at all → full list", async () => {
+    server = await startTestServer(dsl());
+    const r = await postU(server.base, {});
+    expect(r.data).toHaveLength(4);
+  });
+});
+
+describe("paginate — returns one page and (optionally) the total", () => {
+  const many = Array.from({ length: 25 }, (_, i) => ({ id: i + 1 }));
+
+  function dsl(paginate: Record<string, unknown>) {
+    return {
+      routes: [
+        {
+          url: "/ubic",
+          method: "post",
+          paginate,
+          response: { status: 200, body: { data: many, total: 0 } },
+        },
+      ],
+    } as unknown as DslDocument;
+  }
+
+  it("returns the requested page and writes the total (before paging)", async () => {
+    server = await startTestServer(dsl({ of: "data", page: "body.page", size: "body.pageSize", total: "total" }));
+    const r = await postU(server.base, { page: "1", pageSize: "10" });
+    expect(r.data).toHaveLength(10);
+    expect(r.data[0].id).toBe(1);
+    expect(r.total).toBe(25);
+  });
+
+  it("last partial page", async () => {
+    server = await startTestServer(dsl({ of: "data", page: "body.page", size: "body.pageSize" }));
+    const r = await postU(server.base, { page: "3", pageSize: "10" });
+    expect(r.data.map((x: any) => x.id)).toEqual([21, 22, 23, 24, 25]);
+  });
+
+  it("missing page/size → page 1 with defaultSize", async () => {
+    server = await startTestServer(dsl({ of: "data", page: "body.page", size: "body.pageSize", defaultSize: 5 }));
+    const r = await postU(server.base, {});
+    expect(r.data).toHaveLength(5);
+  });
+
+  it("filters then paginate (combined)", async () => {
+    server = await startTestServer({
+      routes: [
+        {
+          url: "/ubic",
+          method: "post",
+          filters: [eqFilter("codigoSede")],
+          paginate: { of: "data", page: "body.page", size: "body.pageSize", total: "total" },
+          response: { status: 200, body: { data: UBIC, total: 0 } },
+        },
+      ],
+    } as unknown as DslDocument);
+    const r = await postU(server.base, { codigoSede: "11", page: "1", pageSize: "2" });
+    expect(r.data).toHaveLength(2); // 3 match, page size 2
+    expect(r.total).toBe(3); // total = matched count, before paging
+  });
+});
